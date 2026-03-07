@@ -12,3 +12,5 @@ matplotlib
 seaborn
 nltk
 spacy
+pdf2image 
+pillow

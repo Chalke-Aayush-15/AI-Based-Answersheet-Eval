@@ -23,6 +23,24 @@ from pathlib import Path
 import numpy as np
 from collections import defaultdict
 import time
+import io
+
+# ========================================
+# NVIDIA NIM OCR IMPORTS
+# ========================================
+try:
+    from pdf2image import convert_from_path
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
+    print("⚠️ pdf2image not installed. Run: pip install pdf2image")
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ Pillow not installed. Run: pip install pillow")
 
 # ========================================
 # NLP SEMANTIC ANALYSIS IMPORTS
@@ -39,10 +57,17 @@ except ImportError:
 # ========================================
 # CONFIGURATION
 # ========================================
-OCR_API_KEY = "K83661332788957"
+NVIDIA_API_KEY = "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"
 SENDER_EMAIL = "nitesh.t.mulam2004@gmail.com"
 APP_PASSWORD = "gxdd zdyh gfym mlcq"
 OUTPUT_DIR = "extracted_pdfs"
+
+# ── Poppler path for Windows ──────────────────────────────────────────────────
+# If poppler is NOT in your system PATH, set the full path to its bin/ folder here.
+# Example: POPPLER_PATH = r"C:\poppler\poppler-25.12.0\Library\bin\pdftoppm.exe"
+# Download from: https://github.com/oschwartz10612/poppler-windows/releases
+# Leave as None if poppler is already in your PATH or on Linux/macOS
+POPPLER_PATH = r"C:\poppler\poppler-25.12.0\Library\bin"   # ← Directory, NOT the .exe file
 
 # ========================================
 # ENHANCED: FAIR EVALUATION ENGINE WITH MULTI-SUBJECT SUPPORT
@@ -533,25 +558,47 @@ class SubjectData:
 
 
 class MultiSubjectPDFProcessor:
-    """Handles PDF processing including OCR extraction for multiple subjects"""
-    
-    def __init__(self, api_key):
-        self.api_key = api_key
-        self.log_messages = []
-    
+    """
+    Handles PDF text extraction using NVIDIA NIM Vision API (llama-3.2-11b-vision-instruct).
+    Falls back to PyPDF2 for digital (non-scanned) PDFs automatically.
+    """
+
+    NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions"
+    NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
+
+    OCR_PROMPT = (
+        "You are a precise OCR engine for university exam answer sheets. "
+        "Extract ALL text exactly as written on this page. "
+        "Rules:\n"
+        "1. Preserve question labels exactly: Q1, Q2, Q1a, Q1b, Q2a, Q2b etc.\n"
+        "2. Keep every word the student wrote — do NOT fix spelling or grammar.\n"
+        "3. Preserve paragraph breaks using newlines.\n"
+        "4. If text is unclear write [illegible] — do NOT guess.\n"
+        "5. Do NOT add any commentary, explanation, or summary.\n"
+        "6. Output ONLY the raw extracted text — nothing else."
+    )
+
+    def __init__(self, nvidia_api_key):
+        self.nvidia_api_key = nvidia_api_key
+        self.log_messages   = []
+        self._headers = {
+            "Authorization": f"Bearer {self.nvidia_api_key}",
+            "Content-Type":  "application/json",
+            "Accept":        "application/json",
+        }
+
     def log(self, message, widget=None):
         """Log message to console and optionally to GUI widget"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_entry = f"[{timestamp}] {message}"
         print(log_entry)
         self.log_messages.append(log_entry)
-        
         if widget:
             widget.insert(tk.END, log_entry + "\n")
             widget.see(tk.END)
-    
+
     def extract_pdf_text(self, pdf_path):
-        """Extract text from PDF using PyPDF2"""
+        """Fast path: extract text from digital PDFs using PyPDF2"""
         text = ''
         try:
             with open(pdf_path, 'rb') as file:
@@ -564,110 +611,261 @@ class MultiSubjectPDFProcessor:
         except Exception as e:
             self.log(f"✗ Error reading PDF {pdf_path}: {e}")
             return ''
-    
+
     def split_pdf_into_chunks(self, pdf_path, pages_per_chunk=3):
-        """Split PDF into chunks for OCR processing"""
+        """Split PDF into chunks (kept for compatibility)"""
         try:
             reader = PdfReader(pdf_path)
             total_pages = len(reader.pages)
-            
             if total_pages <= pages_per_chunk:
                 return [pdf_path]
-            
-            chunks = []
+            chunks   = []
             temp_dir = tempfile.mkdtemp()
-            
             for start_page in range(0, total_pages, pages_per_chunk):
                 end_page = min(start_page + pages_per_chunk, total_pages)
-                chunk_pages = list(range(start_page, end_page))
-                
-                if not chunk_pages:
-                    continue
-                    
-                writer = PdfWriter()
-                for page_num in chunk_pages:
+                writer   = PdfWriter()
+                for page_num in range(start_page, end_page):
                     writer.add_page(reader.pages[page_num])
-                
-                chunk_filename = os.path.join(temp_dir, f"chunk_{start_page//pages_per_chunk + 1}.pdf")
-                with open(chunk_filename, 'wb') as output_pdf:
-                    writer.write(output_pdf)
-                
+                chunk_filename = os.path.join(
+                    temp_dir, f"chunk_{start_page // pages_per_chunk + 1}.pdf"
+                )
+                with open(chunk_filename, 'wb') as out:
+                    writer.write(out)
                 chunks.append(chunk_filename)
-            
             return chunks
-            
         except Exception as e:
             self.log(f"❌ Error splitting PDF: {str(e)}")
             return [pdf_path]
-    
-    def extract_text_with_ocr(self, pdf_path, log_widget=None):
-        """Extract text using OCR.space API with chunking"""
+
+    def _find_poppler_path(self):
+        """
+        Auto-detect poppler on Windows by checking common install locations.
+        Returns the bin path string if found, or None to let pdf2image search PATH.
+        """
+        # 1. Use explicit POPPLER_PATH from configuration if set
+        if POPPLER_PATH and os.path.isdir(POPPLER_PATH):
+            return POPPLER_PATH
+
+        # 2. Search common Windows locations automatically
+        common_roots = [
+            r"C:\poppler",
+            r"C:\Program Files\poppler",
+            r"C:\Program Files (x86)\poppler",
+            os.path.join(os.path.expanduser("~"), "poppler"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "poppler"),
+        ]
+        for root in common_roots:
+            if os.path.isdir(root):
+                # Walk subdirs looking for pdftoppm.exe
+                for dirpath, dirnames, filenames in os.walk(root):
+                    if "pdftoppm.exe" in filenames:
+                        return dirpath
+
+        # 3. Not found — return None and hope it's in PATH
+        return None
+
+    def _convert_pdf_to_images(self, pdf_path, log_widget=None):
+        """
+        Convert PDF pages to PIL images using pdf2image + poppler.
+        Tries auto-detect for poppler path on Windows.
+        Returns list of PIL images or None on failure.
+        """
+        poppler_path = self._find_poppler_path()
+
         try:
-            self.log(f"🔄 Starting OCR extraction for {os.path.basename(pdf_path)}", log_widget)
-            
-            # Split PDF into chunks
-            chunks = self.split_pdf_into_chunks(pdf_path, pages_per_chunk=3)
-            self.log(f"📦 Split into {len(chunks)} chunks", log_widget)
-            
-            all_text = ""
-            
-            for idx, chunk_file in enumerate(chunks, 1):
-                self.log(f"🔍 Processing chunk {idx}/{len(chunks)}", log_widget)
-                
-                # Read chunk as binary
-                with open(chunk_file, "rb") as file:
-                    pdf_bytes = file.read()
-                
-                # Convert to base64
-                pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-                
-                # OCR.space API call
-                url = "https://api.ocr.space/parse/image"
-                data = {
-                    "apikey": self.api_key,
-                    "base64Image": f"data:application/pdf;base64,{pdf_base64}",
-                    "language": "eng",
-                    "isOverlayRequired": False,
-                    "OCREngine": 2,
-                    "scale": True,
-                    "isTable": True,
-                    "detectOrientation": True,
-                    "filetype": "pdf",
-                }
-                
-                response = requests.post(url, data=data, timeout=60)
-                result = json.loads(response.text)
-                
-                if result.get("IsErroredOnProcessing", False):
-                    self.log(f"⚠️ OCR error in chunk {idx}", log_widget)
-                    continue
-                
-                # Extract text from all pages
-                parsed_results = result.get("ParsedResults", [])
-                for page in parsed_results:
-                    page_text = page.get("ParsedText", "")
-                    if page_text.strip():
-                        all_text += page_text + "\n\n"
-                
-                # Clean up temporary chunk file
-                if os.path.exists(chunk_file):
-                    os.remove(chunk_file)
-                
-                # Small delay to avoid rate limiting
-                if idx < len(chunks):
-                    time.sleep(1)
-            
-            # Clean extracted text
-            all_text = re.sub(r'\s+', ' ', all_text)
-            all_text = re.sub(r'(Q\d+[a-zA-Z]?)', r'\n\1:', all_text)
-            
-            self.log(f"✅ OCR extraction complete. Characters: {len(all_text)}", log_widget)
-            return all_text.strip()
-            
+            kwargs = dict(dpi=200, fmt="jpeg", thread_count=2)
+            if poppler_path:
+                kwargs["poppler_path"] = poppler_path
+                self.log(f"📍 Using poppler at: {poppler_path}", log_widget)
+            else:
+                self.log("📍 Using poppler from system PATH", log_widget)
+
+            images = convert_from_path(pdf_path, **kwargs)
+            return images
+
         except Exception as e:
-            self.log(f"❌ OCR extraction failed: {str(e)}", log_widget)
+            err = str(e)
+            self.log(f"❌ PDF→Image conversion failed: {err}", log_widget)
+
+            # Give a very clear fix message for Windows users
+            self.log(
+                "\n🔧 HOW TO FIX — Install Poppler for Windows:\n"
+                "  Step 1: Go to https://github.com/oschwartz10612/poppler-windows/releases\n"
+                "  Step 2: Download the latest Release zip (e.g. Release-24.08.0-0.zip)\n"
+                "  Step 3: Extract it — you will get a folder like 'poppler-24.08.0'\n"
+                "  Step 4: Move that folder to C:\\poppler\\\n"
+                "           so you have: C:\\poppler\\poppler-24.08.0\\Library\\bin\\pdftoppm.exe\n"
+                "  Step 5: Open this file (s10.py) and find the line:\n"
+                "             POPPLER_PATH = None\n"
+                "           Change it to:\n"
+                "             POPPLER_PATH = r'C:\\poppler\\poppler-24.08.0\\Library\\bin'\n"
+                "  Step 6: Save and re-run the app.\n"
+                "  ── OR ──\n"
+                "  Add the bin\\ folder to Windows System PATH:\n"
+                "    Control Panel → System → Advanced → Environment Variables\n"
+                "    → Edit 'Path' → Add: C:\\poppler\\poppler-24.08.0\\Library\\bin",
+                log_widget
+            )
             return None
-    
+
+    def _image_to_base64_jpeg(self, image):
+        """Convert PIL Image to base64 JPEG string"""
+        buf = io.BytesIO()
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+        # Resize if too large for NVIDIA NIM (~20MB limit)
+        w, h = image.size
+        max_px = 1_500_000
+        if w * h > max_px:
+            ratio = (max_px / (w * h)) ** 0.5
+            image = image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+        image.save(buf, format="JPEG", quality=90)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+
+    def _ocr_single_page(self, image, page_num, log_widget=None):
+        """Send one page image to NVIDIA NIM and return extracted text"""
+        img_b64 = self._image_to_base64_jpeg(image)
+        payload = {
+            "model": self.NVIDIA_MODEL,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+                    },
+                    {
+                        "type": "text",
+                        "text": self.OCR_PROMPT
+                    }
+                ]
+            }],
+            "max_tokens":  2048,
+            "temperature": 0.0,
+            "top_p":       1.0,
+            "stream":      False,
+        }
+
+        for attempt in range(1, 3):
+            try:
+                resp = requests.post(
+                    self.NVIDIA_URL,
+                    headers=self._headers,
+                    json=payload,
+                    timeout=90
+                )
+                if resp.status_code == 200:
+                    choices = resp.json().get("choices", [])
+                    if choices:
+                        return choices[0].get("message", {}).get("content", "").strip()
+                    self.log(f"⚠️ Page {page_num}: empty response from NVIDIA NIM", log_widget)
+                    return ""
+
+                elif resp.status_code == 429:
+                    wait = 20 * attempt
+                    self.log(f"⏳ Rate limited — waiting {wait}s before retry…", log_widget)
+                    time.sleep(wait)
+                    continue
+
+                elif resp.status_code == 401:
+                    self.log(
+                        "❌ NVIDIA NIM: Invalid API key (HTTP 401).\n"
+                        "   Check NVIDIA_API_KEY in the CONFIGURATION section.",
+                        log_widget
+                    )
+                    return ""
+
+                else:
+                    self.log(
+                        f"⚠️ Page {page_num} attempt {attempt}: "
+                        f"HTTP {resp.status_code} — {resp.text[:200]}",
+                        log_widget
+                    )
+                    if attempt == 1:
+                        time.sleep(5)
+                    continue
+
+            except requests.exceptions.Timeout:
+                self.log(f"⏱️ Page {page_num} attempt {attempt}: Timeout. Retrying…", log_widget)
+                if attempt == 1:
+                    time.sleep(5)
+                continue
+            except Exception as e:
+                self.log(f"❌ Page {page_num}: {e}", log_widget)
+                return ""
+
+        return ""
+
+    def extract_text_with_ocr(self, pdf_path, log_widget=None):
+        """
+        Extract text from scanned/handwritten PDF using NVIDIA NIM Vision Model.
+        Converts each page to JPEG → sends to NVIDIA NIM → combines all text.
+        """
+        try:
+            if not PDF2IMAGE_AVAILABLE or not PIL_AVAILABLE:
+                self.log(
+                    "❌ Cannot run OCR: pdf2image or Pillow not installed.\n"
+                    "   Run: pip install pdf2image pillow",
+                    log_widget
+                )
+                return None
+
+            self.log(
+                f"🚀 NVIDIA NIM OCR starting for: {os.path.basename(pdf_path)}",
+                log_widget
+            )
+
+            # Step 1: PDF → images (with auto poppler detection)
+            self.log("📸 Converting PDF pages to images (200 DPI)…", log_widget)
+            images = self._convert_pdf_to_images(pdf_path, log_widget)
+            if images is None:
+                return None
+
+            total = len(images)
+            self.log(f"📄 {total} page(s) found. Sending to NVIDIA NIM…", log_widget)
+
+            # Step 2: OCR each page
+            all_parts = []
+            for page_num, image in enumerate(images, start=1):
+                self.log(
+                    f"🧠 NVIDIA NIM — page {page_num}/{total}…",
+                    log_widget
+                )
+                page_text = self._ocr_single_page(image, page_num, log_widget)
+                if page_text:
+                    all_parts.append(f"--- Page {page_num} ---\n{page_text}")
+                    self.log(
+                        f"  ✅ Page {page_num}: {len(page_text)} characters extracted",
+                        log_widget
+                    )
+                else:
+                    self.log(f"  ⚠️ Page {page_num}: no text extracted", log_widget)
+
+                # Respect NVIDIA free-tier rate limits (~10 req/min)
+                if page_num < total:
+                    time.sleep(2)
+
+            if not all_parts:
+                self.log("❌ No text extracted from any page.", log_widget)
+                return None
+
+            # Step 3: Combine and clean
+            combined = "\n\n".join(all_parts)
+            combined = re.sub(r'[ \t]+', ' ', combined)
+            combined = re.sub(r'\n{3,}', '\n\n', combined)
+            combined = re.sub(r'(Q\d+[a-zA-Z]?)', r'\n\1:', combined)
+
+            self.log(
+                f"✅ NVIDIA NIM OCR complete — {len(combined)} characters from {total} page(s).",
+                log_widget
+            )
+            return combined.strip()
+
+        except Exception as e:
+            self.log(f"❌ NVIDIA NIM OCR failed: {str(e)}", log_widget)
+            return None
+
     def create_searchable_pdf(self, text_content, output_path):
         """Create a PDF from extracted text"""
         try:
@@ -676,16 +874,15 @@ class MultiSubjectPDFProcessor:
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib.enums import TA_LEFT
             from reportlab.lib.units import inch
-            
+
             doc = SimpleDocTemplate(
-                output_path, 
+                output_path,
                 pagesize=letter,
-                leftMargin=0.75*inch,
-                rightMargin=0.75*inch,
-                topMargin=0.75*inch,
-                bottomMargin=0.75*inch
+                leftMargin=0.75 * inch,
+                rightMargin=0.75 * inch,
+                topMargin=0.75 * inch,
+                bottomMargin=0.75 * inch
             )
-            
             styles = getSampleStyleSheet()
             text_style = ParagraphStyle(
                 'ExtractedText',
@@ -695,26 +892,24 @@ class MultiSubjectPDFProcessor:
                 alignment=TA_LEFT,
                 wordWrap='CJK'
             )
-            
             story = []
-            lines = text_content.split('\n')
-            
-            for line in lines:
+            for line in text_content.split('\n'):
                 if line.strip():
                     story.append(Paragraph(line.strip(), text_style))
                     story.append(Spacer(1, 6))
-            
             if story:
                 doc.build(story)
                 return True
             return False
-            
+
         except ImportError:
             self.log("⚠️ ReportLab not installed. Cannot create PDF.")
             return False
         except Exception as e:
             self.log(f"❌ Error creating PDF: {str(e)}")
             return False
+
+
 
 
 class EmailSender:
@@ -1004,7 +1199,7 @@ class MultiSubjectFairEvaluator:
         self.consolidated_results_file = None
         self.log_messages = []
         self.email_sender = EmailSender(SENDER_EMAIL, APP_PASSWORD)
-        self.pdf_processor = MultiSubjectPDFProcessor(OCR_API_KEY)
+        self.pdf_processor = MultiSubjectPDFProcessor(NVIDIA_API_KEY)
         
         # Initialize the FAIR evaluation engine
         self.fair_evaluator = FairEvaluationEngine()
@@ -1088,9 +1283,9 @@ class MultiSubjectFairEvaluator:
         if text and len(text.strip()) > 100:
             return self.clean_extracted_text(text)
         
-        # If PyPDF2 fails or text is too short, use OCR
-        if self.use_ocr and OCR_API_KEY:
-            self.log(f"  🔄 Using OCR for {source_name}", log_widget)
+        # If PyPDF2 fails or text is too short, use NVIDIA NIM OCR
+        if self.use_ocr and NVIDIA_API_KEY:
+            self.log(f"  🔄 Using NVIDIA NIM OCR for {source_name}", log_widget)
             ocr_text = self.pdf_processor.extract_text_with_ocr(pdf_path, log_widget)
             if ocr_text:
                 return self.clean_extracted_text(ocr_text)
@@ -2333,7 +2528,7 @@ class MultiSubjectGUI:
         
         subtitle_label = tk.Label(
             title_frame,
-            text="Convert handwritten/ scanned PDFs to searchable text using OCR.space API",
+            text="Convert handwritten/scanned PDFs to searchable text using NVIDIA NIM Vision API",
             font=("Arial", 10),
             fg="#7f8c8d"
         )
@@ -2569,13 +2764,13 @@ class MultiSubjectGUI:
         ).grid(row=2, column=0, columnspan=2, pady=15)
         
         # OCR settings
-        ocr_frame = ttk.LabelFrame(content_frame, text="🔍 OCR Settings", padding=20)
+        ocr_frame = ttk.LabelFrame(content_frame, text="🔍 NVIDIA NIM OCR Settings", padding=20)
         ocr_frame.pack(fill='x', pady=(0, 20))
         
-        ttk.Label(ocr_frame, text="OCR API Key:", font=("Arial", 10)).grid(
+        ttk.Label(ocr_frame, text="NVIDIA NIM API Key:", font=("Arial", 10)).grid(
             row=0, column=0, sticky='w', pady=8
         )
-        self.ocr_api_key_var = tk.StringVar(value=OCR_API_KEY)
+        self.ocr_api_key_var = tk.StringVar(value=NVIDIA_API_KEY)
         ttk.Entry(
             ocr_frame, 
             textvariable=self.ocr_api_key_var, 
@@ -3132,7 +3327,7 @@ Subjects List:
     def run_pdf_processing(self, input_path):
         """Run PDF processing with OCR"""
         try:
-            pdf_processor = MultiSubjectPDFProcessor(OCR_API_KEY)
+            pdf_processor = MultiSubjectPDFProcessor(NVIDIA_API_KEY)
             
             if os.path.isfile(input_path):
                 # Process single file
@@ -3213,11 +3408,11 @@ Subjects List:
     
     def save_settings(self):
         """Save system settings"""
-        global SENDER_EMAIL, APP_PASSWORD, OCR_API_KEY, OUTPUT_DIR
+        global SENDER_EMAIL, APP_PASSWORD, NVIDIA_API_KEY, OUTPUT_DIR
         
         SENDER_EMAIL = self.sender_email_var.get()
         APP_PASSWORD = self.app_password_var.get()
-        OCR_API_KEY = self.ocr_api_key_var.get()
+        NVIDIA_API_KEY = self.ocr_api_key_var.get()
         OUTPUT_DIR = self.output_dir_var.get()
         
         # Create output directory if it doesn't exist
