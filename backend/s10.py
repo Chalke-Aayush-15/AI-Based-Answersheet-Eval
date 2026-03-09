@@ -567,15 +567,17 @@ class MultiSubjectPDFProcessor:
     NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
     OCR_PROMPT = (
-        "You are a precise OCR engine for university exam answer sheets. "
-        "Extract ALL text exactly as written on this page. "
-        "Rules:\n"
-        "1. Preserve question labels exactly: Q1, Q2, Q1a, Q1b, Q2a, Q2b etc.\n"
-        "2. Keep every word the student wrote — do NOT fix spelling or grammar.\n"
-        "3. Preserve paragraph breaks using newlines.\n"
-        "4. If text is unclear write [illegible] — do NOT guess.\n"
-        "5. Do NOT add any commentary, explanation, or summary.\n"
-        "6. Output ONLY the raw extracted text — nothing else."
+        "You are a precise OCR engine for handwritten university exam answer sheets. "
+        "Your ONLY job is to transcribe exactly what is physically written on the page.\n\n"
+        "STRICT RULES:\n"
+        "1. Copy text EXACTLY as handwritten — do NOT fix spelling, grammar, or punctuation.\n"
+        "2. The left margin may contain short labels like 'Q1 a:', 'Q2 b:', 'Q3 c:' — "
+        "   copy these labels EXACTLY as they appear, including any space between the number and letter.\n"
+        "3. Do NOT invent, add, or reformat any labels. If the margin says 'Q1 a:' write 'Q1 a:' — never 'Q1a::' or 'Q1::'.\n"
+        "4. Keep the answer text that follows each label on the same or next line, as a single continuous block.\n"
+        "5. Do NOT split a single answer into multiple sub-entries. If there is no new label, the text belongs to the current question.\n"
+        "6. If text is truly unreadable write [illegible] — never guess.\n"
+        "7. Output ONLY the raw transcribed text. No commentary, no explanation, no markdown formatting."
     )
 
     def __init__(self, nvidia_api_key):
@@ -854,7 +856,7 @@ class MultiSubjectPDFProcessor:
             combined = "\n\n".join(all_parts)
             combined = re.sub(r'[ \t]+', ' ', combined)
             combined = re.sub(r'\n{3,}', '\n\n', combined)
-            combined = re.sub(r'(Q\d+[a-zA-Z]?)', r'\n\1:', combined)
+            # Do NOT reformat Q-labels here — the OCR already preserves them as written
 
             self.log(
                 f"✅ NVIDIA NIM OCR complete — {len(combined)} characters from {total} page(s).",
@@ -1302,8 +1304,8 @@ class MultiSubjectFairEvaluator:
         """Parse master answers from text"""
         master_answers = {}
         
-        # Pattern for Q1, Q1a, Q1 b, Q1a: etc.
-        pattern = r'Q(\d+)([a-zA-Z]?)[\s\.:]*?(.*?)(?=Q\d+[a-zA-Z]?[\s\.:]|$)'
+        # Pattern handles: Q1, Q1a, Q1 a, Q1:, Q1a:, Q1 a: (with or without space between number and letter)
+        pattern = r'Q(\d+)\s*([a-zA-Z]?)\s*[:\.]?\s*(.*?)(?=Q\d+\s*[a-zA-Z]?\s*[:\.]|$)'
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
         
         for q_num, subpart, answer in matches:
@@ -1319,7 +1321,7 @@ class MultiSubjectFairEvaluator:
                 master_answers[key] = answer
         
         # Also look for ## Q1 a: format (from markdown-style)
-        pattern2 = r'#+[\s]*Q(\d+)([a-zA-Z]?)[\s\.:]*?(.*?)(?=#+[\s]*Q\d+[a-zA-Z]?[\s\.:]|$)'
+        pattern2 = r'#+[\s]*Q(\d+)\s*([a-zA-Z]?)\s*[:\.]?\s*(.*?)(?=#+[\s]*Q\d+\s*[a-zA-Z]?\s*[:\.]|$)'
         matches2 = re.findall(pattern2, text, re.DOTALL | re.IGNORECASE)
         
         for q_num, subpart, answer in matches2:
@@ -1400,8 +1402,8 @@ class MultiSubjectFairEvaluator:
         # Extract answers
         answers = {}
         
-        # Pattern for Q1, Q2, Q3, etc.
-        pattern = r'Q(\d+)([a-zA-Z]?)[\s\.:]*?(.*?)(?=Q\d+[a-zA-Z]?[\s\.:]|$)'
+        # Pattern handles: Q1, Q1a, Q1 a, Q1:, Q1a:, Q1 a: (with or without space between number and letter)
+        pattern = r'Q(\d+)\s*([a-zA-Z]?)\s*[:\.]?\s*(.*?)(?=Q\d+\s*[a-zA-Z]?\s*[:\.]|$)'
         matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
         
         for q_num, subpart, answer in matches:
@@ -1427,7 +1429,7 @@ class MultiSubjectFairEvaluator:
                     answers[key] = answer
         
         # Look for ## Q format (markdown-style)
-        pattern3 = r'#+[\s]*Q(\d+)([a-zA-Z]?)[\s\.:]*?(.*?)(?=#+[\s]*Q\d+[a-zA-Z]?[\s\.:]|$)'
+        pattern3 = r'#+[\s]*Q(\d+)\s*([a-zA-Z]?)\s*[:\.]?\s*(.*?)(?=#+[\s]*Q\d+\s*[a-zA-Z]?\s*[:\.]|$)'
         matches3 = re.findall(pattern3, text, re.DOTALL | re.IGNORECASE)
         
         for q_num, subpart, answer in matches3:
