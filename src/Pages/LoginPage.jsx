@@ -1,153 +1,138 @@
-import { useState } from 'react';
-import styles from './AuthPage.module.css';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/Authcontext";
+import "./AuthPage.module.css";
 
-export default function LoginPage({ onNavigate }) {
-  const [form, setForm] = useState({ email: '', password: '' });
-  const [showPass, setShowPass] = useState(false);
+export default function LoginPage() {
+  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { login, register } = useAuth();
+  const navigate = useNavigate();
 
-  function handleSubmit(e) {
+  const handleChange = (e) =>
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.password) {
-      setError('Please fill in all fields.');
-      return;
-    }
-    setError('');
+    setError("");
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      if (mode === "login") {
+        await login(form.email, form.password);
+      } else {
+        await register(form.name, form.email, form.password);
+      }
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.message || "Something went wrong");
+    } finally {
       setLoading(false);
-      onNavigate('dashboard');
-    }, 1800);
-  }
+    }
+  };
 
   return (
-    <div className={styles.page}>
-      {/* Left Panel */}
-      <div className={styles.leftPanel}>
-        <div className={styles.leftContent}>
-          <button className={styles.backBtn} onClick={() => onNavigate('home')}>
-            ← Back to Home
-          </button>
-          <div className={styles.leftBrand}>
-            <span className={styles.leftBrandIcon}>🎓</span>
-            <span className={styles.leftBrandName}>EvalAI Grader</span>
-          </div>
-          <h2 className={styles.leftTitle}>
-            Grade smarter.<br />
-            <span className={styles.leftAccent}>Not harder.</span>
-          </h2>
-          <p className={styles.leftDesc}>
-            AI-powered evaluation for educators — evaluate hundreds of answer sheets in seconds with FAIR scoring.
-          </p>
-          <div className={styles.leftFeatures}>
-            {[
-              { icon: '🧠', text: 'NLP Semantic Understanding' },
-              { icon: '⚡', text: '10x Faster than Manual Grading' },
-              { icon: '📊', text: 'Detailed Analytics & Reports' },
-              { icon: '✉️', text: 'Automated Email to Students' },
-            ].map(f => (
-              <div key={f.text} className={styles.leftFeature}>
-                <span className={styles.leftFeatureIcon}>{f.icon}</span>
-                <span>{f.text}</span>
-              </div>
-            ))}
-          </div>
-          <div className={styles.leftCard}>
-            <div className={styles.leftCardTop}>
-              <div className={styles.leftAvatars}>
-                {['👩‍🏫', '👨‍🏫', '👩‍💻'].map((a, i) => (
-                  <span key={i} className={styles.leftAvatar} style={{ marginLeft: i > 0 ? '-12px' : 0 }}>{a}</span>
-                ))}
-              </div>
-              <div className={styles.leftCardStat}>
-                <strong>500+</strong> educators trust EvalAI
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className={styles.leftBlob} />
-        <div className={styles.leftBlobB} />
+    <div className="login-root">
+      {/* Background grid */}
+      <div className="login-bg">
+        <div className="bg-grid" />
+        <div className="bg-glow" />
       </div>
 
-      {/* Right Panel — Form */}
-      <div className={styles.rightPanel}>
-        <div className={styles.formWrap}>
-          <div className={styles.formHeader}>
-            <h1 className={styles.formTitle}>Welcome back</h1>
-            <p className={styles.formSub}>Sign in to your EvalAI account</p>
+      <div className="login-card">
+        {/* Header */}
+        <div className="login-header">
+          <div className="login-logo">
+            <span className="logo-bracket">[</span>
+            <span className="logo-text">AI</span>
+            <span className="logo-bracket">]</span>
           </div>
-
-          {error && <div className={styles.errorBox}>⚠️ {error}</div>}
-
-          <form className={styles.form} onSubmit={handleSubmit}>
-            <div className={styles.field}>
-              <label className={styles.label}>Email Address</label>
-              <div className={styles.inputWrap}>
-                <span className={styles.inputIcon}>✉️</span>
-                <input
-                  className={styles.input}
-                  type="email"
-                  placeholder="you@institution.edu"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-
-            <div className={styles.field}>
-              <div className={styles.labelRow}>
-                <label className={styles.label}>Password</label>
-                <button type="button" className={styles.forgotBtn} onClick={() => alert('Reset link sent!')}>Forgot password?</button>
-              </div>
-              <div className={styles.inputWrap}>
-                <span className={styles.inputIcon}>🔒</span>
-                <input
-                  className={styles.input}
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={form.password}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  autoComplete="current-password"
-                />
-                <button type="button" className={styles.showPassBtn} onClick={() => setShowPass(p => !p)}>
-                  {showPass ? '🙈' : '👁️'}
-                </button>
-              </div>
-            </div>
-
-            <label className={styles.rememberRow}>
-              <input type="checkbox" className={styles.checkbox} />
-              <span>Keep me signed in</span>
-            </label>
-
-            <button className={`${styles.submitBtn} ${loading ? styles.submitting : ''}`} type="submit" disabled={loading}>
-              {loading
-                ? <><span className={styles.spinner} /> Signing in...</>
-                : '🚀 Sign In'}
-            </button>
-          </form>
-
-          <div className={styles.dividerRow}>
-            <div className={styles.dividerLine} />
-            <span className={styles.dividerText}>or continue with</span>
-            <div className={styles.dividerLine} />
-          </div>
-
-          <div className={styles.socialRow}>
-            <button className={styles.socialBtn}><span style={{fontSize:'16px'}}>G</span> Google</button>
-            <button className={styles.socialBtn}><span style={{fontSize:'16px'}}>M</span> Microsoft</button>
-          </div>
-
-          <p className={styles.switchText}>
-            Don't have an account?{' '}
-            <button className={styles.switchLink} onClick={() => onNavigate('register')}>
-              Create one free →
-            </button>
-          </p>
+          <h1 className="login-title">Answer Sheet Evaluator</h1>
+          <p className="login-subtitle">Teacher Portal</p>
         </div>
+
+        {/* Tab switch */}
+        <div className="tab-row">
+          <button
+            className={`tab-btn ${mode === "login" ? "active" : ""}`}
+            onClick={() => { setMode("login"); setError(""); }}
+            type="button"
+          >
+            Sign In
+          </button>
+          <button
+            className={`tab-btn ${mode === "register" ? "active" : ""}`}
+            onClick={() => { setMode("register"); setError(""); }}
+            type="button"
+          >
+            Register
+          </button>
+        </div>
+
+        {/* Form */}
+        <form className="login-form" onSubmit={handleSubmit}>
+          {mode === "register" && (
+            <div className="field">
+              <label htmlFor="name">Full Name</label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                placeholder="Dr. Anita Sharma"
+                value={form.name}
+                onChange={handleChange}
+                required
+                autoComplete="name"
+              />
+            </div>
+          )}
+
+          <div className="field">
+            <label htmlFor="email">Email Address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="teacher@university.edu"
+              value={form.email}
+              onChange={handleChange}
+              required
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              placeholder={mode === "register" ? "Min. 6 characters" : "••••••••"}
+              value={form.password}
+              onChange={handleChange}
+              required
+              minLength={mode === "register" ? 6 : undefined}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+            />
+          </div>
+
+          {error && <p className="login-error">{error}</p>}
+
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? (
+              <span className="btn-spinner" />
+            ) : mode === "login" ? (
+              "Sign In →"
+            ) : (
+              "Create Account →"
+            )}
+          </button>
+        </form>
+
+        <p className="login-footer">
+          Secure access for authorized educators only.
+        </p>
       </div>
     </div>
   );
