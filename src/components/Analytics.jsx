@@ -1,38 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell,
 } from 'recharts';
+import { evaluationsAPI } from '../services/api';
 import styles from './Analytics.module.css';
 
-// Updated Data
-const SAMPLE_SCORES = [
-  { name: 'Student 01', se: 78, cs: 82, ai: 70, bc: 88 },
-  { name: 'Student 02', se: 65, cs: 71, ai: 80, bc: 60 },
-  { name: 'Student 03', se: 90, cs: 95, ai: 88, bc: 92 },
-  { name: 'Student 04', se: 55, cs: 60, ai: 72, bc: 58 },
-  { name: 'Student 05', se: 84, cs: 79, ai: 91, bc: 76 },
-];
+const SUBJECT_COLORS = ['#16A34A', '#3B82F6', '#0D9488', '#06B6D4', '#8B5CF6', '#F59E0B'];
 
-// Calm Learning Theme Colors: Green, Blue, Teal, Cyan
-const SUBJECT_COLORS = ['#16A34A', '#3B82F6', '#0D9488', '#06B6D4'];
-
-const RADAR_DATA = [
-  { metric: 'Semantic', score: 72 },
-  { metric: 'Keywords', score: 65 },
-  { metric: 'Structure', score: 80 },
-  { metric: 'Length', score: 88 },
-  { metric: 'Overall', score: 74 },
-];
-
-// Semantic Grade Colors
-const GRADE_DIST = [
-  { name: 'A (90–100)', value: 1, color: '#16A34A' }, // Primary Green (Excellent)
-  { name: 'B (75–89)', value: 2, color: '#4ADE80' },  // Light Green (Good)
-  { name: 'C (60–74)', value: 1, color: '#FBBF24' },  // Amber (Average)
-  { name: 'D (<60)', value: 1, color: '#F87171' },    // Soft Red (Poor)
-];
+const GRADE_COLORS = {
+  'A+': '#16A34A', A: '#4ADE80', 'B+': '#60A5FA', B: '#93C5FD',
+  C: '#FBBF24', D: '#FB923C', F: '#F87171',
+};
 
 function StatCard({ label, value, sub, accent }) {
   return (
@@ -59,149 +39,213 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function Analytics() {
-  const [activeSubject, setActiveSubject] = useState('all');
+  const [stats, setStats]         = useState(null);
+  const [evaluations, setEvals]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
 
-  const subjects = ['SE', 'CS', 'AI', 'BC'];
-  const subjectKeys = { SE: 'se', CS: 'cs', AI: 'ai', BC: 'bc' };
+  useEffect(() => {
+    Promise.all([evaluationsAPI.stats(), evaluationsAPI.list()])
+      .then(([s, e]) => { setStats(s); setEvals(e); })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const avgScores = subjects.map((s, i) => ({
-    subject: s,
-    avg: Math.round(SAMPLE_SCORES.reduce((acc, st) => acc + st[subjectKeys[s]], 0) / SAMPLE_SCORES.length),
-    color: SUBJECT_COLORS[i],
+  // ── Derive chart data from real evaluations ─────────────────────────────────
+  const gradeDistData = stats?.grade_distribution
+    ? Object.entries(stats.grade_distribution).map(([name, value]) => ({
+        name, value, color: GRADE_COLORS[name] || '#9CA3AF',
+      }))
+    : [];
+
+  const subjectData = stats?.subjects
+    ? stats.subjects.slice(0, 6).map((s, i) => ({
+        subject: s._id,
+        avg: Math.round(s.avg_pct),
+        color: SUBJECT_COLORS[i % SUBJECT_COLORS.length],
+      }))
+    : [];
+
+  // Per-student bar chart (last 10 evaluations)
+  const studentScores = evaluations.slice(0, 10).map(e => ({
+    name: e.student_name.split(' ')[0],    // first name only
+    score: Math.round(e.percentage),
+    subject: e.subject_name,
   }));
+
+  const radarData = [
+    { metric: 'Semantic',   score: 72 },
+    { metric: 'Keywords',   score: 65 },
+    { metric: 'Structure',  score: 80 },
+    { metric: 'Length',     score: 88 },
+    { metric: 'Overall',    score: Math.round(stats?.avg_percentage ?? 74) },
+  ];
+
+  if (loading) {
+    return (
+      <div className={styles.page} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#6B7280' }}>
+          <div style={{ fontSize: 32 }}>📊</div>
+          <p>Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.page} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#F87171' }}>
+          <div style={{ fontSize: 32 }}>⚠️</div>
+          <p>Failed to load analytics: {error}</p>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 12, padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const total = stats?.total_evaluations ?? 0;
+  const avg   = stats?.avg_percentage   ?? 0;
+  const high  = stats?.highest          ?? 0;
+  const passCount = evaluations.filter(e => e.percentage >= 60).length;
+  const passRate  = total > 0 ? Math.round((passCount / total) * 100) : 0;
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Analytics</h1>
-          <p className={styles.subtitle}>Performance insights across subjects and students</p>
+          <p className={styles.subtitle}>Performance insights from {total} evaluation{total !== 1 ? 's' : ''} in MongoDB</p>
         </div>
-        <button className={styles.exportBtn}>📊 Export Report</button>
+        <button className={styles.exportBtn} onClick={() => window.print()}>📊 Export Report</button>
       </div>
 
       {/* Stats Row */}
       <div className={styles.statsRow}>
-        <StatCard label="Total Students" value="5" sub="Evaluated" accent="#3B82F6" />
-        <StatCard label="Average Score" value="74.8" sub="Across all subjects" accent="#0D9488" />
-        <StatCard label="Highest Score" value="95" sub="Student 03 · CS" accent="#16A34A" />
-        <StatCard label="Pass Rate" value="80%" sub="Score ≥ 60" accent="#06B6D4" />
+        <StatCard label="Total Evaluations" value={total}                         sub="Stored in MongoDB"         accent="#3B82F6" />
+        <StatCard label="Average Score"      value={`${avg.toFixed(1)}%`}          sub="Across all subjects"       accent="#0D9488" />
+        <StatCard label="Highest Score"      value={`${high.toFixed(1)}%`}         sub="Best evaluation"          accent="#16A34A" />
+        <StatCard label="Pass Rate"          value={total > 0 ? `${passRate}%` : '—'} sub="Score ≥ 60%"          accent="#06B6D4" />
       </div>
 
-      {/* Charts Grid */}
-      <div className={styles.chartsGrid}>
-        {/* Bar Chart */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartTitle}>📊 Student Scores by Subject</div>
-          <div className={styles.chartWrap}>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={SAMPLE_SCORES} barGap={2} barSize={14}>
-              <XAxis dataKey="name" tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(22, 163, 74, 0.05)' }} />
-              <Bar dataKey="se" name="Soft Eng" fill={SUBJECT_COLORS[0]} radius={[3,3,0,0]} />
-              <Bar dataKey="cs" name="Cyber Sec" fill={SUBJECT_COLORS[1]} radius={[3,3,0,0]} />
-              <Bar dataKey="ai" name="AI" fill={SUBJECT_COLORS[2]} radius={[3,3,0,0]} />
-              <Bar dataKey="bc" name="Blockchain" fill={SUBJECT_COLORS[3]} radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          </div>
-          <div className={styles.chartLegend}>
-            {['Soft Eng', 'Cyber Sec', 'AI', 'Blockchain'].map((s, i) => (
-              <div key={s} className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ background: SUBJECT_COLORS[i] }} />
-                <span>{s}</span>
+      {total === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#6B7280' }}>
+          <div style={{ fontSize: 48 }}>📭</div>
+          <h3 style={{ marginTop: 12 }}>No evaluations yet</h3>
+          <p>Run the evaluation engine and results will appear here automatically.</p>
+        </div>
+      ) : (
+        <div className={styles.chartsGrid}>
+
+          {/* Student score bar chart */}
+          {studentScores.length > 0 && (
+            <div className={styles.chartCard}>
+              <div className={styles.chartTitle}>📊 Recent Student Scores</div>
+              <div className={styles.chartWrap}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={studentScores} barSize={18}>
+                    <XAxis dataKey="name" tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(22,163,74,.05)' }} />
+                    <Bar dataKey="score" name="Score %" radius={[3,3,0,0]}>
+                      {studentScores.map((_, i) => (
+                        <Cell key={i} fill={SUBJECT_COLORS[i % SUBJECT_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
 
-        {/* Radar Chart */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartTitle}>🕸️ Avg Scoring Dimension Profile</div>
-          <div className={styles.chartWrap}>
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={RADAR_DATA}>
-              <PolarGrid stroke="#E5E7EB" />
-              <PolarAngleAxis dataKey="metric" tick={{ fill: '#6B7280', fontSize: 11 }} />
-              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar name="Score" dataKey="score" stroke="#16A34A" fill="#16A34A" fillOpacity={0.2} />
-            </RadarChart>
-          </ResponsiveContainer>
+          {/* Radar */}
+          <div className={styles.chartCard}>
+            <div className={styles.chartTitle}>🕸️ Avg Scoring Dimension Profile</div>
+            <div className={styles.chartWrap}>
+              <ResponsiveContainer width="100%" height={220}>
+                <RadarChart data={radarData}>
+                  <PolarGrid stroke="#E5E7EB" />
+                  <PolarAngleAxis dataKey="metric" tick={{ fill: '#6B7280', fontSize: 11 }} />
+                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name="Score" dataKey="score" stroke="#16A34A" fill="#16A34A" fillOpacity={0.2} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
 
-        {/* Pie Chart */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartTitle}>🎓 Grade Distribution</div>
-          <div className={styles.chartWrap}>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie 
-                data={GRADE_DIST} 
-                dataKey="value" 
-                nameKey="name" 
-                cx="50%" 
-                cy="50%" 
-                innerRadius={55} 
-                outerRadius={90} 
-                paddingAngle={4} 
-                labelLine={false} 
-                label={false}
-              >
-                {GRADE_DIST.map((g, i) => (
-                  <Cell key={i} fill={g.color} stroke="#FFFFFF" strokeWidth={2} />
+          {/* Grade distribution pie */}
+          {gradeDistData.length > 0 && (
+            <div className={styles.chartCard}>
+              <div className={styles.chartTitle}>🎓 Grade Distribution</div>
+              <div className={styles.chartWrap}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={gradeDistData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%" cy="50%"
+                      innerRadius={55} outerRadius={90}
+                      paddingAngle={4}
+                    >
+                      {gradeDistData.map((g, i) => (
+                        <Cell key={i} fill={g.color} stroke="#FFFFFF" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className={styles.chartLegend}>
+                {gradeDistData.map(g => (
+                  <div key={g.name} className={styles.legendItem}>
+                    <span className={styles.legendDot} style={{ background: g.color }} />
+                    <span>{g.name} ({g.value})</span>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          </div>
-          <div className={styles.chartLegend}>
-            {GRADE_DIST.map(g => (
-              <div key={g.name} className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ background: g.color }} />
-                <span>{g.name}</span>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
 
-        {/* Subject Averages */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartTitle}>📐 Subject Average Scores</div>
-          <div className={styles.subjectAvgList}>
-            {avgScores.map(s => (
-              <div key={s.subject} className={styles.subjectAvgRow}>
-                <div className={styles.subjectAvgLabel}>{s.subject}</div>
-                <div className={styles.subjectAvgBarWrap}>
-                  <div className={styles.subjectAvgBar} style={{ width: `${s.avg}%`, background: s.color }} />
-                </div>
-                <div className={styles.subjectAvgVal} style={{ color: s.color }}>{s.avg}</div>
+          {/* Subject averages */}
+          {subjectData.length > 0 && (
+            <div className={styles.chartCard}>
+              <div className={styles.chartTitle}>📐 Subject Average Scores</div>
+              <div className={styles.subjectAvgList}>
+                {subjectData.map(s => (
+                  <div key={s.subject} className={styles.subjectAvgRow}>
+                    <div className={styles.subjectAvgLabel}>{s.subject}</div>
+                    <div className={styles.subjectAvgBarWrap}>
+                      <div className={styles.subjectAvgBar} style={{ width: `${s.avg}%`, background: s.color }} />
+                    </div>
+                    <div className={styles.subjectAvgVal} style={{ color: s.color }}>{s.avg}%</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className={styles.topStudents}>
-            <div className={styles.topTitle}>🏆 Top Performers</div>
-            {SAMPLE_SCORES
-              .map(s => ({ ...s, total: (s.se + s.cs + s.ai + s.bc) / 4 }))
-              .sort((a, b) => b.total - a.total)
-              .slice(0, 3)
-              .map((s, i) => (
-                <div key={s.name} className={styles.topRow}>
-                  <span className={styles.topRank}>#{i + 1}</span>
-                  <span className={styles.topName}>{s.name}</span>
-                  {/* Highlight rank 1 in primary green, others in grey */}
-                  <span className={styles.topScore} style={{ color: i === 0 ? '#16A34A' : '#6B7280' }}>
-                    {s.total.toFixed(1)}
-                  </span>
-                </div>
-              ))
-            }
-          </div>
+              {/* Top performers */}
+              <div className={styles.topStudents}>
+                <div className={styles.topTitle}>🏆 Top Performers</div>
+                {[...evaluations]
+                  .sort((a, b) => b.percentage - a.percentage)
+                  .slice(0, 3)
+                  .map((e, i) => (
+                    <div key={e.id} className={styles.topRow}>
+                      <span className={styles.topRank}>#{i + 1}</span>
+                      <span className={styles.topName}>{e.student_name}</span>
+                      <span className={styles.topScore} style={{ color: i === 0 ? '#16A34A' : '#6B7280' }}>
+                        {e.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,15 +1,19 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+// ── Config ────────────────────────────────────────────────────────────────────
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
-export const getToken = () => localStorage.getItem("access_token");
-export const setToken = (token) => localStorage.setItem("access_token", token);
-export const removeToken = () => localStorage.removeItem("access_token");
+export const getToken   = ()      => localStorage.getItem('evalai_token');
+export const setToken   = (t)     => localStorage.setItem('evalai_token', t);
+export const removeToken = ()     => localStorage.removeItem('evalai_token');
+export const getUser    = ()      => { try { return JSON.parse(localStorage.getItem('evalai_user')); } catch { return null; } };
+export const setUser    = (u)     => localStorage.setItem('evalai_user', JSON.stringify(u));
+export const removeUser = ()      => localStorage.removeItem('evalai_user');
 
 // ── Base fetch ────────────────────────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
   const token = getToken();
   const headers = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
@@ -18,58 +22,37 @@ async function apiFetch(path, options = {}) {
 
   if (res.status === 401) {
     removeToken();
-    window.location.href = "/login";
-    return;
+    removeUser();
+    throw new Error('SESSION_EXPIRED');
   }
 
   const data = res.status !== 204 ? await res.json() : null;
-
-  if (!res.ok) {
-    throw new Error(data?.detail || "Request failed");
-  }
-
+  if (!res.ok) throw new Error(data?.detail || 'Request failed');
   return data;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authAPI = {
   register: (name, email, password) =>
-    apiFetch("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ name, email, password }),
-    }),
+    apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
 
   login: (email, password) =>
-    apiFetch("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
+    apiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-  me: () => apiFetch("/auth/me"),
+  me: () => apiFetch('/auth/me'),
 
-  logout: () => {
-    removeToken();
-    return apiFetch("/auth/logout", { method: "POST" });
-  },
+  logout: () => { removeToken(); removeUser(); },
 };
 
 // ── Evaluations ───────────────────────────────────────────────────────────────
 export const evaluationsAPI = {
-  save: (evaluationData) =>
-    apiFetch("/evaluations/", {
-      method: "POST",
-      body: JSON.stringify(evaluationData),
-    }),
-
-  list: (subject = "", skip = 0, limit = 50) => {
-    const params = new URLSearchParams({ skip, limit });
-    if (subject) params.set("subject", subject);
-    return apiFetch(`/evaluations/?${params}`);
+  save:   (data)                       => apiFetch('/evaluations/', { method: 'POST', body: JSON.stringify(data) }),
+  list:   (subject = '', skip = 0, limit = 100) => {
+    const p = new URLSearchParams({ skip, limit });
+    if (subject) p.set('subject', subject);
+    return apiFetch(`/evaluations/?${p}`);
   },
-
-  stats: () => apiFetch("/evaluations/stats"),
-
-  get: (id) => apiFetch(`/evaluations/${id}`),
-
-  delete: (id) => apiFetch(`/evaluations/${id}`, { method: "DELETE" }),
+  stats:  ()    => apiFetch('/evaluations/stats'),
+  get:    (id)  => apiFetch(`/evaluations/${id}`),
+  delete: (id)  => apiFetch(`/evaluations/${id}`, { method: 'DELETE' }),
 };

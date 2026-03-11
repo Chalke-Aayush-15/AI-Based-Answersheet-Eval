@@ -4,20 +4,26 @@ import { PLANS, canAccess } from '../subscription/plans';
 import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
-  { id: 'subjects',    icon: '📚', label: 'Subjects' },
-  { id: 'evaluation',  icon: '🎯', label: 'Evaluation' },
-  { id: 'pdf',         icon: '📄', label: 'PDF Tools' },
-  { id: 'analytics',   icon: '📊', label: 'Analytics' },
-  { id: 'settings',    icon: '⚙️', label: 'Settings' },
+  { id: 'subjects',   icon: '📚', label: 'Subjects' },
+  { id: 'evaluation', icon: '🎯', label: 'Evaluation' },
+  { id: 'pdf',        icon: '📄', label: 'PDF Tools' },
+  { id: 'analytics',  icon: '📊', label: 'Analytics' },
+  { id: 'settings',   icon: '⚙️', label: 'Settings' },
 ];
 
 export default function Sidebar({ onOpenPricing }) {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, logout } = useApp();
   const { state: subState, isActive, daysLeft } = useSubscription();
   const plan = subState.planId ? PLANS[subState.planId] : null;
+  const user = state.authUser;
+
+  function handleLogout() {
+    if (window.confirm('Sign out of EvalAI?')) logout();
+  }
 
   return (
     <aside className={styles.sidebar}>
+      {/* Brand */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}><span>∑</span></div>
         <div className={styles.brandText}>
@@ -28,6 +34,29 @@ export default function Sidebar({ onOpenPricing }) {
 
       <div className={styles.divider} />
 
+      {/* Logged-in user info */}
+      {user && (
+        <div className={styles.userCard}>
+          <div className={styles.userAvatar}>
+            {user.name?.[0]?.toUpperCase() || '?'}
+          </div>
+          <div className={styles.userInfo}>
+            <span className={styles.userName}>{user.name}</span>
+            <span className={styles.userEmail}>{user.email}</span>
+          </div>
+          <button
+            className={styles.logoutBtn}
+            onClick={handleLogout}
+            title="Sign out"
+          >
+            ⏻
+          </button>
+        </div>
+      )}
+
+      <div className={styles.divider} />
+
+      {/* Plan badge */}
       {plan ? (
         <div className={styles.planBadge} style={{ borderColor: plan.color + '44', background: plan.bgGradient }}>
           <span className={styles.planBadgeIcon}>{plan.badge}</span>
@@ -46,6 +75,7 @@ export default function Sidebar({ onOpenPricing }) {
 
       <div className={styles.divider} />
 
+      {/* Navigation */}
       <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => {
           const locked = plan ? !canAccess(plan.id, item.id) : true;

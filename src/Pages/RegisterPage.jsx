@@ -3,7 +3,7 @@ import styles from './AuthPage.module.css';
 
 const ROLES = ['Teacher / Educator', 'Professor', 'Institution Admin', 'Researcher'];
 
-export default function RegisterPage({ onNavigate }) {
+export default function RegisterPage({ onNavigate, onRegister }) {
   const [form, setForm] = useState({
     fullName: '', email: '', role: '', password: '', confirm: '', agree: false
   });
@@ -25,7 +25,7 @@ export default function RegisterPage({ onNavigate }) {
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
   const strengthColor = ['', '#ef4444', '#f59e0b', '#3b82f6', '#16A34A'];
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!form.fullName || !form.email || !form.password) {
       setError('Please fill in all required fields.');
@@ -35,16 +35,28 @@ export default function RegisterPage({ onNavigate }) {
       setError('Passwords do not match.');
       return;
     }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
     if (!form.agree) {
       setError('Please accept the terms to continue.');
       return;
     }
     setError('');
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await onRegister(form.fullName.trim(), form.email.trim(), form.password);
+      // App.js re-renders automatically when authUser is set
+    } catch (err) {
+      if (err.message.includes('already registered') || err.message.includes('duplicate')) {
+        setError('This email is already registered. Try signing in.');
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
+    } finally {
       setLoading(false);
-      onNavigate('dashboard');
-    }, 2000);
+    }
   }
 
   return (
@@ -162,7 +174,7 @@ export default function RegisterPage({ onNavigate }) {
                 <input
                   className={styles.input}
                   type={showPass ? 'text' : 'password'}
-                  placeholder="Min. 8 characters"
+                  placeholder="Min. 6 characters"
                   value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                   autoComplete="new-password"
@@ -174,7 +186,7 @@ export default function RegisterPage({ onNavigate }) {
               {form.password && (
                 <div className={styles.strengthRow}>
                   <div className={styles.strengthBars}>
-                    {[1,2,3,4].map(i => (
+                    {[1, 2, 3, 4].map(i => (
                       <div
                         key={i}
                         className={styles.strengthBar}
