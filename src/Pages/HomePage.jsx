@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styles from './HomePage.module.css';
 
 const NAV_LINKS = ['Features', 'How It Works', 'Subjects', 'Contact'];
@@ -65,7 +66,7 @@ const useTilt = () => {
 // ── Contact Form Component ──────────────────────────────────────────
 function ContactSection() {
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
-  const [status, setStatus] = useState('idle'); // idle | sending | success
+  const [status, setStatus] = useState('idle');
   const [touched, setTouched] = useState({});
 
   const errors = {
@@ -116,10 +117,7 @@ function ContactSection() {
           <h2 className={styles.sectionTitle}>Get in Touch</h2>
           <p className={styles.sectionSub}>Have questions about EvalAI? We'd love to hear from you.</p>
         </div>
-
         <div className={styles.contactLayout}>
-
-          {/* Left info panel */}
           <div className={styles.contactInfoCard}>
             <h3 className={styles.contactInfoTitle}>Let's talk 👋</h3>
             <p className={styles.contactInfoDesc}>
@@ -146,102 +144,54 @@ function ContactSection() {
             </div>
           </div>
 
-          {/* Right form panel */}
           <form className={styles.contactForm} onSubmit={submit} noValidate>
-
-            {/* Row: Name + Email */}
             <div className={styles.contactFormRow}>
               <div className={styles.contactField}>
                 <label className={styles.contactLabel}>Full Name <span className={styles.req}>*</span></label>
                 <div className={`${styles.contactInputWrap} ${touched.name && errors.name ? styles.inputErr : ''}`}>
                   <span className={styles.contactInputIcon}>👤</span>
-                  <input
-                    className={styles.contactInput}
-                    type="text"
-                    placeholder="Dr. / Prof. / Your Name"
-                    value={form.name}
-                    onChange={e => change('name', e.target.value)}
-                    onBlur={() => blur('name')}
-                  />
+                  <input className={styles.contactInput} type="text" placeholder="Dr. / Prof. / Your Name"
+                    value={form.name} onChange={e => change('name', e.target.value)} onBlur={() => blur('name')} />
                 </div>
                 {touched.name && errors.name && <span className={styles.contactErrMsg}>⚠ {errors.name}</span>}
               </div>
-
               <div className={styles.contactField}>
                 <label className={styles.contactLabel}>Email <span className={styles.req}>*</span></label>
                 <div className={`${styles.contactInputWrap} ${touched.email && errors.email ? styles.inputErr : ''}`}>
                   <span className={styles.contactInputIcon}>✉️</span>
-                  <input
-                    className={styles.contactInput}
-                    type="email"
-                    placeholder="you@institution.edu"
-                    value={form.email}
-                    onChange={e => change('email', e.target.value)}
-                    onBlur={() => blur('email')}
-                  />
+                  <input className={styles.contactInput} type="email" placeholder="you@institution.edu"
+                    value={form.email} onChange={e => change('email', e.target.value)} onBlur={() => blur('email')} />
                 </div>
                 {touched.email && errors.email && <span className={styles.contactErrMsg}>⚠ {errors.email}</span>}
               </div>
             </div>
-
-            {/* Topic */}
             <div className={styles.contactField}>
               <label className={styles.contactLabel}>Topic <span className={styles.req}>*</span></label>
               <div className={`${styles.contactInputWrap} ${touched.subject && errors.subject ? styles.inputErr : ''}`}>
-                <span className={styles.contactInputIcon}>📝</span>
-                <select
-                  className={`${styles.contactInput} ${styles.contactSelect}`}
-                  value={form.subject}
-                  onChange={e => change('subject', e.target.value)}
-                  onBlur={() => blur('subject')}
-                >
-                  <option value="">Select a topic…</option>
-                  <option>General Inquiry</option>
-                  <option>Technical Support</option>
-                  <option>Subscription & Billing</option>
-                  <option>Feature Request</option>
-                  <option>Partnership / Institution</option>
-                  <option>Bug Report</option>
+                <span className={styles.contactInputIcon}>📋</span>
+                <select className={`${styles.contactInput} ${styles.contactSelect}`}
+                  value={form.subject} onChange={e => change('subject', e.target.value)} onBlur={() => blur('subject')}>
+                  <option value="">Select a topic</option>
+                  <option value="demo">Request a Demo</option>
+                  <option value="pricing">Pricing Inquiry</option>
+                  <option value="support">Technical Support</option>
+                  <option value="partnership">Partnership</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
               {touched.subject && errors.subject && <span className={styles.contactErrMsg}>⚠ {errors.subject}</span>}
             </div>
-
-            {/* Message */}
             <div className={styles.contactField}>
               <label className={styles.contactLabel}>Message <span className={styles.req}>*</span></label>
-              <div className={`${styles.contactInputWrap} ${styles.textareaWrap} ${touched.message && errors.message ? styles.inputErr : ''}`}>
-                <textarea
-                  className={`${styles.contactInput} ${styles.contactTextarea}`}
-                  placeholder="Describe your question or issue in detail…"
-                  rows={5}
-                  value={form.message}
-                  onChange={e => change('message', e.target.value)}
-                  onBlur={() => blur('message')}
-                />
+              <div className={`${styles.contactInputWrap} ${touched.message && errors.message ? styles.inputErr : ''}`}>
+                <textarea className={`${styles.contactInput} ${styles.contactTextarea}`} placeholder="Write your message here (min. 20 characters)..."
+                  value={form.message} onChange={e => change('message', e.target.value)} onBlur={() => blur('message')} rows={4} />
               </div>
-              <div className={styles.msgFooter}>
-                <span>{touched.message && errors.message ? <span className={styles.contactErrMsg}>⚠ {errors.message}</span> : null}</span>
-                <span className={`${styles.charCount} ${form.message.length >= 20 ? styles.charOk : ''}`}>
-                  {form.message.length} / 20+ chars
-                </span>
-              </div>
+              {touched.message && errors.message && <span className={styles.contactErrMsg}>⚠ {errors.message}</span>}
             </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              className={`${styles.contactSubmitBtn} ${status === 'sending' ? styles.submitting : ''}`}
-              disabled={status === 'sending'}
-            >
-              {status === 'sending'
-                ? <><span className={styles.btnSpinner} /> Sending…</>
-                : <>✉️ Send Message</>}
+            <button className={`${styles.contactSubmitBtn} ${status === 'sending' ? styles.contactSubmitSending : ''}`} type="submit" disabled={status === 'sending'}>
+              {status === 'sending' ? <><span className={styles.spinner} /> Sending...</> : '📨 Send Message'}
             </button>
-
-            <p className={styles.privacyNote}>
-              🔒 Your information is secure and will never be shared with third parties.
-            </p>
           </form>
         </div>
       </div>
@@ -249,42 +199,70 @@ function ContactSection() {
   );
 }
 
-// ── Main Page ───────────────────────────────────────
-export default function HomePage({ onNavigate }) {
-  const [scrolled, setScrolled] = useState(false);
+// ── Main HomePage Component ───────────────────────────────────────────────────
+export default function HomePage() {
+  const navigate = useNavigate();  // ← React Router hook
   const [menuOpen, setMenuOpen] = useState(false);
   const { ref: heroCardRef, style: heroCardStyle } = useTilt();
 
-  useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', h);
-    return () => window.removeEventListener('scroll', h);
-  }, []);
-
   return (
     <div className={styles.page}>
+    {/* ── NAVBAR ── */}
+<header className={styles.nav}>
+  <div className={styles.navInner}>
 
-      {/* ── NAV ── */}
-      <header className={`${styles.nav} ${scrolled ? styles.navScrolled : ''}`}>
-        <div className={styles.navInner}>
-          <div className={styles.brand} onClick={() => window.scrollTo(0,0)} style={{cursor:'pointer'}}>
-            <span className={styles.brandIcon}>🎓</span>
-            <span className={styles.brandName}>EvalAI <span className={styles.brandSub}>Grader</span></span>
-          </div>
-          <nav className={`${styles.navLinks} ${menuOpen ? styles.navLinksOpen : ''}`}>
-            {NAV_LINKS.map(l => (
-              <a key={l} href={`#${l.toLowerCase().replace(' ','-')}`} className={styles.navLink} onClick={() => setMenuOpen(false)}>{l}</a>
-            ))}
-          </nav>
-          <div className={styles.navCtas}>
-            <button className={styles.navLogin} onClick={() => onNavigate('login')}>Login</button>
-            <button className={styles.navRegister} onClick={() => onNavigate('register')}>Get Started</button>
-          </div>
-          <button className={`${styles.hamburger} ${menuOpen ? styles.hamburgerActive : ''}`} onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
-            <span /><span /><span />
-          </button>
-        </div>
-      </header>
+    {/* Brand */}
+    <div className={styles.brand}>
+      <span className={styles.brandIcon}>🎓</span>
+      <span className={styles.brandName}>
+        EvalAI <span className={styles.brandSub}>Grader</span>
+      </span>
+    </div>
+
+    {/* Navigation Links */}
+    <nav className={styles.navLinks}>
+      {NAV_LINKS.map(l => (
+        <a
+          key={l}
+          href={`#${l.toLowerCase().replace(' ', '-')}`}
+          className={styles.navLink}
+          onClick={() => setMenuOpen(false)}
+        >
+          {l}
+        </a>
+      ))}
+    </nav>
+
+    {/* CTA Buttons */}
+    <div className={styles.navCtas}>
+      <button
+        className={styles.navLogin}
+        onClick={() => navigate('/login')}
+      >
+        Sign In
+      </button>
+
+      <button
+        className={styles.navRegister}
+        onClick={() => navigate('/register')}
+      >
+        Get Started →
+      </button>
+    </div>
+
+    {/* Mobile Hamburger */}
+    <button
+      className={`${styles.hamburger} ${menuOpen ? styles.hamburgerActive : ''}`}
+      onClick={() => setMenuOpen(!menuOpen)}
+      aria-label="Toggle menu"
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+  </div>
+</header> 
 
       {/* ── HERO ── */}
       <section className={styles.hero}>
@@ -303,7 +281,8 @@ export default function HomePage({ onNavigate }) {
               Automated <span className={styles.heroAccent}>Answer Sheet</span><br />Grading System
             </h1>
             <p className={styles.heroDesc}>
-              Upload PDF answer sheets and get instant AI-powered evaluation. Leverage NLP semantic analysis, detailed analytics, and automated email reports to save hours of work.
+              Upload PDF answer sheets and get instant AI-powered evaluation. Leverage NLP semantic analysis,
+              detailed analytics, and automated email reports to save hours of work.
             </p>
             <div className={styles.heroStats}>
               {STATS.map(s => (
@@ -315,7 +294,7 @@ export default function HomePage({ onNavigate }) {
               ))}
             </div>
             <div className={styles.heroCtas}>
-              <button className={styles.ctaPrimary} onClick={() => onNavigate('register')}>🚀 Start Grading Now</button>
+              <button className={styles.ctaPrimary} onClick={() => navigate('/register')}>🚀 Start Grading Now</button>
               <a href="#how-it-works" className={styles.ctaSecondary}>See How It Works ↓</a>
             </div>
           </div>
@@ -324,23 +303,23 @@ export default function HomePage({ onNavigate }) {
             <div className={styles.heroCard}>
               <div className={styles.heroCardHeader}>
                 <div className={styles.heroCardDots}>
-                  <span className={styles.heroCardDot} style={{background:'#ef4444'}} />
-                  <span className={styles.heroCardDot} style={{background:'#f59e0b'}} />
-                  <span className={styles.heroCardDot} style={{background:'#22c55e'}} />
+                  <span className={styles.heroCardDot} style={{ background: '#ef4444' }} />
+                  <span className={styles.heroCardDot} style={{ background: '#f59e0b' }} />
+                  <span className={styles.heroCardDot} style={{ background: '#22c55e' }} />
                 </div>
                 <span className={styles.heroCardTitle}>Live Evaluation Process</span>
               </div>
               <div className={styles.heroCardBody}>
-                {['Student_01.pdf','Student_02.pdf','Student_03.pdf'].map((name,i) => (
-                  <div key={name} className={styles.heroCardRow} style={{animationDelay:`${i*0.4}s`}}>
+                {['Student_01.pdf', 'Student_02.pdf', 'Student_03.pdf'].map((name, i) => (
+                  <div key={name} className={styles.heroCardRow} style={{ animationDelay: `${i * 0.4}s` }}>
                     <div className={styles.fileIcon}>📄</div>
                     <div className={styles.fileInfo}>
                       <span className={styles.heroCardName}>{name}</span>
                       <div className={styles.heroCardBar}>
-                        <div className={styles.heroCardBarFill} style={{width:`${[78,65,92][i]}%`,animationDelay:`${i*0.4+0.3}s`}} />
+                        <div className={styles.heroCardBarFill} style={{ width: `${[78, 65, 92][i]}%`, animationDelay: `${i * 0.4 + 0.3}s` }} />
                       </div>
                     </div>
-                    <span className={styles.heroCardScore}>{[78,65,92][i]}%</span>
+                    <span className={styles.heroCardScore}>{[78, 65, 92][i]}%</span>
                   </div>
                 ))}
               </div>
@@ -365,8 +344,8 @@ export default function HomePage({ onNavigate }) {
             <p className={styles.sectionSub}>Powered by cutting-edge NLP and OCR — built for educators</p>
           </div>
           <div className={styles.featuresGrid}>
-            {FEATURES.map((f,i) => (
-              <div key={f.title} className={styles.featureCard} style={{animationDelay:`${i*0.1}s`}}>
+            {FEATURES.map((f, i) => (
+              <div key={f.title} className={styles.featureCard} style={{ animationDelay: `${i * 0.1}s` }}>
                 <div className={styles.featureIconWrapper}>{f.icon}</div>
                 <h3 className={styles.featureTitle}>{f.title}</h3>
                 <p className={styles.featureDesc}>{f.desc}</p>
@@ -385,7 +364,7 @@ export default function HomePage({ onNavigate }) {
             <p className={styles.sectionSub}>Four simple steps from upload to results</p>
           </div>
           <div className={styles.stepsRow}>
-            {HOW_IT_WORKS.map((step,i) => (
+            {HOW_IT_WORKS.map((step, i) => (
               <div key={step.step} className={styles.stepCard}>
                 <div className={styles.stepNum}>{step.step}</div>
                 {i < HOW_IT_WORKS.length - 1 && <div className={styles.stepConnector} />}
@@ -424,7 +403,7 @@ export default function HomePage({ onNavigate }) {
         <div className={styles.ctaBannerInner}>
           <h2 className={styles.ctaBannerTitle}>Ready to modernize your grading?</h2>
           <p className={styles.ctaBannerSub}>Join educators using AI to evaluate faster, fairer, and smarter.</p>
-          <button className={styles.ctaBannerBtn} onClick={() => onNavigate('register')}>🎓 Create Free Account</button>
+          <button className={styles.ctaBannerBtn} onClick={() => navigate('/register')}>🎓 Create Free Account</button>
         </div>
       </section>
 
@@ -437,7 +416,7 @@ export default function HomePage({ onNavigate }) {
           </div>
           <nav className={styles.footerNav}>
             {NAV_LINKS.map(l => (
-              <a key={l} href={`#${l.toLowerCase().replace(' ','-')}`} className={styles.footerNavLink}>{l}</a>
+              <a key={l} href={`#${l.toLowerCase().replace(' ', '-')}`} className={styles.footerNavLink}>{l}</a>
             ))}
           </nav>
           <p className={styles.footerCopy}>© 2026 EvalAI Grader · Built with ❤️ for educators</p>

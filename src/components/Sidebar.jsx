@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useSubscription } from '../subscription/SubscriptionContext';
 import { PLANS, canAccess } from '../subscription/plans';
@@ -12,13 +13,22 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({ onOpenPricing }) {
+  const navigate = useNavigate();
   const { state, dispatch, logout } = useApp();
   const { state: subState, isActive, daysLeft } = useSubscription();
   const plan = subState.planId ? PLANS[subState.planId] : null;
   const user = state.authUser;
 
   function handleLogout() {
-    if (window.confirm('Sign out of EvalAI?')) logout();
+    if (window.confirm('Sign out of EvalAI?')) {
+      logout();
+      navigate('/', { replace: true });   // ← go to home after logout
+    }
+  }
+
+  function handleTabClick(tabId) {
+    dispatch({ type: 'SET_TAB', payload: tabId });
+    navigate(`/dashboard/${tabId}`);      // ← update URL when tab changes
   }
 
   return (
@@ -44,13 +54,7 @@ export default function Sidebar({ onOpenPricing }) {
             <span className={styles.userName}>{user.name}</span>
             <span className={styles.userEmail}>{user.email}</span>
           </div>
-          <button
-            className={styles.logoutBtn}
-            onClick={handleLogout}
-            title="Sign out"
-          >
-            ⏻
-          </button>
+          <button className={styles.logoutBtn} onClick={handleLogout} title="Sign out">⏻</button>
         </div>
       )}
 
@@ -75,7 +79,7 @@ export default function Sidebar({ onOpenPricing }) {
 
       <div className={styles.divider} />
 
-      {/* Navigation */}
+      {/* Navigation — each item updates the URL */}
       <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => {
           const locked = plan ? !canAccess(plan.id, item.id) : true;
@@ -84,7 +88,7 @@ export default function Sidebar({ onOpenPricing }) {
             <button
               key={item.id}
               className={`${styles.navItem} ${active ? styles.active : ''} ${locked ? styles.locked : ''}`}
-              onClick={() => dispatch({ type: 'SET_TAB', payload: item.id })}
+              onClick={() => handleTabClick(item.id)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navLabel}>{item.label}</span>

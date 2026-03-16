@@ -1,60 +1,18 @@
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { SubscriptionProvider, useSubscription } from './subscription/SubscriptionContext';
-import { canAccess, PLANS } from './subscription/plans';
+import styles from './App.module.css';
 
-import Sidebar from './components/Sidebar';
-import SubjectManager from './components/SubjectManager';
-import EvaluationPanel from './components/EvaluationPanel';
-import PDFTools from './components/PDFTools';
-import Analytics from './components/Analytics';
-import Settings from './components/Settings';
-import LockedOverlay from './components/LockedOverlay';
+import HomePage     from './Pages/HomePage';
+import LoginPage    from './Pages/LoginPage';
+import RegisterPage from './Pages/RegisterPage';
+import PricingPage  from './Pages/Pricingpage';
+import Dashboard    from './Pages/Dashboard';
 
-import HomePage from './Pages/HomePage.jsx';
-import LoginPage from './Pages/LoginPage.jsx';
-import RegisterPage from './Pages/RegisterPage.jsx';
-import PricingPage from './Pages/Pricingpage.jsx';
-
-import appStyles from './App.module.css';
-
-// ── Panel map ─────────────────────────────────────────────────────────────────
-const PANELS = {
-  subjects:   <SubjectManager />,
-  evaluation: <EvaluationPanel />,
-  pdf:        <PDFTools />,
-  analytics:  <Analytics />,
-  settings:   <Settings />,
-};
-
-// ── Dashboard (subscription-gated) ───────────────────────────────────────────
-function Dashboard({ onOpenPricing }) {
+// ── Auth guard: redirects to /login if not logged in ─────────────────────────
+function RequireAuth({ children }) {
   const { state } = useApp();
-  const { state: subState, isActive } = useSubscription();
-  const activeTab = state.activeTab;
 
-  const planId = subState.planId;
-  const isLocked = !isActive || (planId && !canAccess(planId, activeTab));
-
-  return (
-    <div className={appStyles.app}>
-      <Sidebar onOpenPricing={onOpenPricing} />
-      <main className={appStyles.content}>
-        {PANELS[activeTab]}
-        {isLocked && <LockedOverlay tabId={activeTab} onUpgrade={onOpenPricing} />}
-      </main>
-    </div>
-  );
-}
-
-// ── Root App — reads auth from AppContext ────────────────────────────────────
-function AppRouter() {
-  const { state, login, register, logout } = useApp();
-  const [page, setPage] = useState('home'); // 'home' | 'login' | 'register'
-
-  const navigate = (target) => setPage(target);
-
-  // While validating stored token — show nothing (or a spinner)
   if (state.authLoading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0c10' }}>
@@ -63,42 +21,84 @@ function AppRouter() {
     );
   }
 
-  // ── Not logged in ──────────────────────────────────────────────────────────
-  if (!state.authUser) {
-    if (page === 'home')     return <HomePage onNavigate={navigate} />;
-    if (page === 'register') return <RegisterPage onNavigate={navigate} onRegister={register} />;
-    // default: login
-    return <LoginPage onNavigate={navigate} onLogin={login} />;
-  }
+  if (!state.authUser) return <Navigate to="/login" replace />;
+  return children;
+}
 
-  // ── Logged in → Dashboard with subscription context ────────────────────────
+// ── Guest guard: redirects to /dashboard if already logged in ────────────────
+function GuestOnly({ children }) {
+  const { state } = useApp();
+  if (state.authLoading) return null;
+  if (state.authUser) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
+// ── Dashboard wrapper that also wraps SubscriptionProvider ───────────────────
+function DashboardLayout() {
   return (
     <SubscriptionProvider>
-      <DashboardRouter onLogout={logout} />
+      <DashboardRoutes />
     </SubscriptionProvider>
   );
 }
 
-function DashboardRouter({ onLogout }) {
-  const [showPricing, setShowPricing] = useState(false);
+function DashboardRoutes() {
   const { state: subState } = useSubscription();
 
-  if (!subState.planId && !showPricing) {
-    return <PricingPage onBack={() => setShowPricing(true)} />;
-  }
+  // If the user hasn't picked a plan yet, send them to pricing
+  if (!subState.planId) return <Navigate to="/pricing" replace />;
 
-  if (showPricing || subState.showPricing) {
-    return <PricingPage onBack={() => setShowPricing(false)} />;
-  }
-
-  return <Dashboard onOpenPricing={() => setShowPricing(true)} />;
+  return <Dashboard />;
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// ── Root Router ───────────────────────────────────────────────────────────────
+function AppRouter() {
+  const { login, register, logout } = useApp();
+
+  return (
+    <Routes>
+      {/* Public pages */}
+      <Route path="/"         element={<HomePage />} />
+      <Route path="/login"    element={<GuestOnly><LoginPage onLogin={login} /></GuestOnly>} />
+      <Route path="/register" element={<GuestOnly><RegisterPage onRegister={register} /></GuestOnly>} />
+
+      {/* Pricing — accessible when logged in (plan selection) */}
+      <Route path="/pricing"  element={<RequireAuth><SubscriptionProvider><PricingPage /></SubscriptionProvider></RequireAuth>} />
+
+      {/* Protected dashboard */}
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <DashboardLayout />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/dashboard/:tab"
+        element={
+          <RequireAuth>
+            <DashboardLayout />
+          </RequireAuth>
+        }
+      />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
-    <AppProvider>
-      <AppRouter />
-    </AppProvider>
+    <BrowserRouter>
+      <AppProvider>
+        <div className={styles.app}>
+          <div className={styles.content}>
+            <AppRouter />
+          </div>
+        </div>
+      </AppProvider>
+    </BrowserRouter>
   );
 }

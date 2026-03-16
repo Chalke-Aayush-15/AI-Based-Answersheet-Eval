@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PLANS, TAB_META } from '../subscription/plans';
 import { useSubscription } from '../subscription/SubscriptionContext';
 import styles from './PricingPage.module.css';
@@ -14,25 +15,18 @@ function PlanCard({ plan, isCurrentPlan, onSelect, animDelay }) {
       onMouseLeave={() => setHover(false)}
     >
       {plan.popular && (
-        <div className={styles.popularBadge} style={{ background: plan.color }}>
-          🥇 Most Popular
-        </div>
+        <div className={styles.popularBadge} style={{ background: plan.color }}>🥇 Most Popular</div>
       )}
       {isCurrentPlan && (
-        <div className={styles.activeBadge} style={{ background: plan.color }}>
-          ✅ Current Plan
-        </div>
+        <div className={styles.activeBadge} style={{ background: plan.color }}>✅ Current Plan</div>
       )}
 
-      {/* Plan Header */}
       <div className={styles.cardHeader} style={{ background: plan.bgGradient }}>
         <div className={styles.planBadge}>{plan.badge}</div>
         <h3 className={styles.planName} style={{ color: plan.color }}>{plan.name}</h3>
         <p className={styles.planTagline}>{plan.tagline}</p>
         <div className={styles.priceRow}>
-          <span className={styles.price} style={{ color: plan.color }}>
-            {plan.priceLabel}
-          </span>
+          <span className={styles.price} style={{ color: plan.color }}>{plan.priceLabel}</span>
           {plan.durationDays
             ? <span className={styles.pricePer}>/ {plan.durationDays} days</span>
             : plan.price > 0
@@ -44,7 +38,6 @@ function PlanCard({ plan, isCurrentPlan, onSelect, animDelay }) {
         )}
       </div>
 
-      {/* Services Access */}
       <div className={styles.cardBody}>
         <div className={styles.accessTitle}>Services Included</div>
         <div className={styles.accessGrid}>
@@ -59,8 +52,6 @@ function PlanCard({ plan, isCurrentPlan, onSelect, animDelay }) {
             );
           })}
         </div>
-
-        {/* Feature list */}
         <div className={styles.featureList}>
           {plan.features.map(f => (
             <div key={f.text} className={`${styles.featureItem} ${!f.included ? styles.featureDisabled : ''}`}>
@@ -91,7 +82,8 @@ function PlanCard({ plan, isCurrentPlan, onSelect, animDelay }) {
   );
 }
 
-export default function PricingPage({ onBack }) {
+export default function PricingPage() {
+  const navigate = useNavigate();
   const { state, dispatch } = useSubscription();
   const [selected, setSelected] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -103,12 +95,21 @@ export default function PricingPage({ onBack }) {
 
   function handleConfirm() {
     dispatch({ type: 'ACTIVATE_PLAN', payload: { planId: selected } });
-    if (onBack) onBack();
+    // After activating, go to dashboard
+    navigate('/dashboard', { replace: true });
+  }
+
+  function handleBack() {
+    // Go back to dashboard if already have a plan, else go home
+    if (state.planId) {
+      navigate('/dashboard');
+    } else {
+      navigate('/');
+    }
   }
 
   return (
     <div className={styles.page}>
-      {/* BG */}
       <div className={styles.bg}>
         <div className={styles.bgBlob1} />
         <div className={styles.bgBlob2} />
@@ -116,11 +117,10 @@ export default function PricingPage({ onBack }) {
       </div>
 
       <div className={styles.inner}>
-        {/* Header */}
         <div className={styles.pageHeader}>
-          {onBack && (
-            <button className={styles.backBtn} onClick={onBack}>← Back to Dashboard</button>
-          )}
+          {/* ← use navigate instead of onBack prop */}
+          <button className={styles.backBtn} onClick={handleBack}>← Back to Dashboard</button>
+
           <div className={styles.headerTag}>💳 Subscription Plans</div>
           <h1 className={styles.pageTitle}>
             Choose your <span className={styles.titleAccent}>learning plan</span>
@@ -129,7 +129,6 @@ export default function PricingPage({ onBack }) {
             Start free for 5 days, then pick the plan that fits your institution's needs.
           </p>
 
-          {/* Plan comparison chips */}
           <div className={styles.comparisonChips}>
             <div className={styles.chip} style={{ borderColor: '#9CA3AF', color: '#6B7280' }}>
               ⏱️ Free Trial — All features · 5 days
@@ -145,7 +144,6 @@ export default function PricingPage({ onBack }) {
           </div>
         </div>
 
-        {/* Plan Cards */}
         <div className={styles.cardsRow}>
           {Object.values(PLANS).map((plan, i) => (
             <PlanCard
@@ -186,9 +184,7 @@ export default function PricingPage({ onBack }) {
                   const has = row.key ? p.allowedTabs.includes(row.key) : row.vals[j];
                   return (
                     <div key={p.id} className={styles.comparePlanCol}>
-                      <span className={has ? styles.checkYes : styles.checkNo}>
-                        {has ? '✅' : '—'}
-                      </span>
+                      <span className={has ? styles.checkYes : styles.checkNo}>{has ? '✅' : '—'}</span>
                     </div>
                   );
                 })}

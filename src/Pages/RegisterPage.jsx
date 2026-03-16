@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import styles from './AuthPage.module.css';
 
 const ROLES = ['Teacher / Educator', 'Professor', 'Institution Admin', 'Researcher'];
 
-export default function RegisterPage({ onNavigate, onRegister }) {
+export default function RegisterPage({ onRegister }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     fullName: '', email: '', role: '', password: '', confirm: '', agree: false
   });
@@ -47,7 +49,8 @@ export default function RegisterPage({ onNavigate, onRegister }) {
     setLoading(true);
     try {
       await onRegister(form.fullName.trim(), form.email.trim(), form.password);
-      // App.js re-renders automatically when authUser is set
+      // Navigate to pricing so the new user can pick a plan
+      navigate('/pricing', { replace: true });
     } catch (err) {
       if (err.message.includes('already registered') || err.message.includes('duplicate')) {
         setError('This email is already registered. Try signing in.');
@@ -64,9 +67,8 @@ export default function RegisterPage({ onNavigate, onRegister }) {
       {/* Left Panel */}
       <div className={styles.leftPanel}>
         <div className={styles.leftContent}>
-          <button className={styles.backBtn} onClick={() => onNavigate('home')}>
-            ← Back to Home
-          </button>
+          <Link to="/" className={styles.backBtn}>← Back to Home</Link>
+
           <div className={styles.leftBrand}>
             <span className={styles.leftBrandIcon}>🎓</span>
             <span className={styles.leftBrandName}>EvalAI Grader</span>
@@ -187,11 +189,8 @@ export default function RegisterPage({ onNavigate, onRegister }) {
                 <div className={styles.strengthRow}>
                   <div className={styles.strengthBars}>
                     {[1, 2, 3, 4].map(i => (
-                      <div
-                        key={i}
-                        className={styles.strengthBar}
-                        style={{ background: i <= strength ? strengthColor[strength] : '#E5E7EB' }}
-                      />
+                      <div key={i} className={styles.strengthBar}
+                        style={{ background: i <= strength ? strengthColor[strength] : '#E5E7EB' }} />
                     ))}
                   </div>
                   <span className={styles.strengthLabel} style={{ color: strengthColor[strength] }}>
@@ -230,17 +229,14 @@ export default function RegisterPage({ onNavigate, onRegister }) {
             </label>
 
             <button className={`${styles.submitBtn} ${loading ? styles.submitting : ''}`} type="submit" disabled={loading}>
-              {loading
-                ? <><span className={styles.spinner} /> Creating account...</>
-                : '🎓 Create Free Account'}
+              {loading ? <><span className={styles.spinner} /> Creating account...</> : '🎓 Create Free Account'}
             </button>
           </form>
 
           <p className={styles.switchText}>
             Already have an account?{' '}
-            <button className={styles.switchLink} onClick={() => onNavigate('login')}>
-              Sign in →
-            </button>
+            {/* ← Link to /login */}
+            <Link to="/login" className={styles.switchLink}>Sign in →</Link>
           </p>
         </div>
       </div>

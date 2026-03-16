@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import styles from './AuthPage.module.css';
 
-export default function LoginPage({ onNavigate, onLogin }) {
+// onLogin is still passed from App.js (calls AppContext login)
+export default function LoginPage({ onLogin }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -17,7 +20,8 @@ export default function LoginPage({ onNavigate, onLogin }) {
     setLoading(true);
     try {
       await onLogin(form.email, form.password);
-      // App.js will re-render automatically once authUser is set
+      // AppContext sets authUser → App.js navigates to /dashboard automatically
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       if (err.message === 'SESSION_EXPIRED') {
         setError('Session expired. Please log in again.');
@@ -34,9 +38,9 @@ export default function LoginPage({ onNavigate, onLogin }) {
       {/* Left Panel */}
       <div className={styles.leftPanel}>
         <div className={styles.leftContent}>
-          <button className={styles.backBtn} onClick={() => onNavigate('home')}>
-            ← Back to Home
-          </button>
+          {/* ← Use Link instead of onNavigate button */}
+          <Link to="/" className={styles.backBtn}>← Back to Home</Link>
+
           <div className={styles.leftBrand}>
             <span className={styles.leftBrandIcon}>🎓</span>
             <span className={styles.leftBrandName}>EvalAI Grader</span>
@@ -131,9 +135,7 @@ export default function LoginPage({ onNavigate, onLogin }) {
             </label>
 
             <button className={`${styles.submitBtn} ${loading ? styles.submitting : ''}`} type="submit" disabled={loading}>
-              {loading
-                ? <><span className={styles.spinner} /> Signing in...</>
-                : '🚀 Sign In'}
+              {loading ? <><span className={styles.spinner} /> Signing in...</> : '🚀 Sign In'}
             </button>
           </form>
 
@@ -150,9 +152,8 @@ export default function LoginPage({ onNavigate, onLogin }) {
 
           <p className={styles.switchText}>
             Don't have an account?{' '}
-            <button className={styles.switchLink} onClick={() => onNavigate('register')}>
-              Create one free →
-            </button>
+            {/* ← Link to /register instead of onNavigate('register') */}
+            <Link to="/register" className={styles.switchLink}>Create one free →</Link>
           </p>
         </div>
       </div>
