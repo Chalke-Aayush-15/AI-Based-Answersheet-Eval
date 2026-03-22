@@ -56,3 +56,23 @@ export const evaluationsAPI = {
   get:    (id)  => apiFetch(`/evaluations/${id}`),
   delete: (id)  => apiFetch(`/evaluations/${id}`, { method: 'DELETE' }),
 };
+
+// ── Payments ──────────────────────────────────────────────────────────────────
+export const paymentsAPI = {
+  // Step 1: Create a Razorpay order on the backend
+  createOrder: (planId) =>
+    apiFetch('/payments/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ plan_id: planId }),
+    }),
+
+  // Step 2: Verify payment signature and save record to MongoDB
+  verifyPayment: (razorpay_order_id, razorpay_payment_id, razorpay_signature, plan_id) =>
+    apiFetch('/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify({ razorpay_order_id, razorpay_payment_id, razorpay_signature, plan_id }),
+    }),
+
+  // Payment history
+  history: () => apiFetch('/payments/history'),
+};

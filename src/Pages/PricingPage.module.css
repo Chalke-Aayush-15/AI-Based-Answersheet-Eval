@@ -506,3 +506,82 @@
 }
 
 .modalCancel:hover { border-color: #9CA3AF; color: #374151; }
+
+/* ── ADD THESE TO THE BOTTOM OF YOUR PricingPage.module.css ── */
+
+/* Error banner */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FEF2F2;
+  border: 1.5px solid #FECACA;
+  color: #DC2626;
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 28px;
+}
+
+.errorClose {
+  background: none;
+  border: none;
+  color: #DC2626;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+/* Button spinner */
+.btnSpinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Payment receipt inside success modal */
+.successIcon {
+  font-size: 56px;
+  margin-bottom: 12px;
+}
+
+.paymentReceipt {
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 16px 0 20px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.receiptRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.receiptLabel {
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.receiptVal {
+  color: #1F2937;
+  font-weight: 600;
+  max-width: 220px;
+  text-align: right;
+  word-break: break-all;
+}

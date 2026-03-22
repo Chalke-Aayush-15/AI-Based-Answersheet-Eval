@@ -265,9 +265,10 @@
   font-size: 10px;
   color: var(--text-dim);
   letter-spacing: 0.3px;
+  margin-top: 8px;
 }
 
-/* ── Add these to your existing Sidebar.module.css ── */
+/* ── User Card & Footer Styles ── */
 
 .userCard {
   display: flex;
@@ -278,6 +279,7 @@
   background: rgba(255,255,255,.03);
   border: 1px solid rgba(255,255,255,.06);
   border-radius: 6px;
+  /* Removed justify-content to align items to left naturally */
 }
 
 .userAvatar {
@@ -318,20 +320,88 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.sidebarFooter {
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column; /* Stack items vertically */
+  gap: 8px; /* Space between items */
+}
 
-.logoutBtn {
-  background: none;
-  border: none;
-  color: #64748b;
-  font-size: 15px;
+/* --- Pricing Link (Plain Text) --- */
+.pricingLink {
+  /* Reset */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  list-style: none;
+
+  /* Style */
+  color: var(--text-muted);
+  font-size: 11px;
   cursor: pointer;
-  padding: 3px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  transition: color .15s, background .15s;
+  font-family: var(--font-body);
+  text-align: left;
+  padding: 4px 0;
+  margin: 0;
+  width: 100%;
+  transition: color 0.15s;
+}
+
+.pricingLink:hover {
+  color: #16A34A;
+}
+
+/* --- Logout Button (In a Box) --- */
+.logoutBtn {
+  /* Reset */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none !important;
+  list-style: none;
+
+  /* Box Styling */
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center text in the box */
+  width: 100%;
+  padding: 10px 0;
+  margin-top: 4px;
+  
+  /* Border and Background (Subtle Red for Logout) */
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3); /* Light red border */
+  border-radius: 6px;
+  
+  /* Text Styling */
+  color: #f87171; /* Red text */
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  gap: 6px; /* Space between icon and text */
+  transition: all 0.2s ease;
 }
 
 .logoutBtn:hover {
-  color: #f87171;
-  background: rgba(248,113,113,.08);
+  background: rgba(248, 113, 113, 0.1); /* Light red background on hover */
+  border-color: #f87171; /* Darker border on hover */
+}
+
+.versionTag {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  margin-top: 6px;
+  text-align: center;
+  /* Reset */
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
 }

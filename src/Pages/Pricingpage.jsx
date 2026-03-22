@@ -2,17 +2,29 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PLANS, TAB_META } from '../subscription/plans';
 import { useSubscription } from '../subscription/SubscriptionContext';
+import { paymentsAPI } from '../services/api';
 import styles from './PricingPage.module.css';
 
-function PlanCard({ plan, isCurrentPlan, onSelect, animDelay }) {
-  const [hover, setHover] = useState(false);
+// ── Load Razorpay script dynamically ─────────────────────────────────────────
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) { resolve(true); return; }
+    const script = document.createElement('script');
+    script.src    = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload  = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+// ── Plan Card ─────────────────────────────────────────────────────────────────
+function PlanCard({ plan, isCurrentPlan, onSelect, loadingPlan, animDelay }) {
+  const isLoading = loadingPlan === plan.id;
 
   return (
     <div
       className={`${styles.card} ${plan.popular ? styles.cardPopular : ''} ${isCurrentPlan ? styles.cardActive : ''}`}
       style={{ animationDelay: `${animDelay}s`, borderColor: isCurrentPlan ? plan.color : '' }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
     >
       {plan.popular && (
         <div className={styles.popularBadge} style={{ background: plan.color }}>🥇 Most Popular</div>
@@ -67,49 +79,119 @@ function PlanCard({ plan, isCurrentPlan, onSelect, animDelay }) {
       <div className={styles.cardFooter}>
         <button
           className={styles.selectBtn}
-          style={isCurrentPlan ? { background: plan.color } : {
-            background: plan.popular ? plan.color : 'transparent',
-            color: plan.popular ? 'white' : plan.color,
-            border: `2px solid ${plan.color}`,
-          }}
+          style={isCurrentPlan
+            ? { background: plan.color, color: 'white' }
+            : {
+                background: plan.popular ? plan.color : 'transparent',
+                color:      plan.popular ? 'white' : plan.color,
+                border:     `2px solid ${plan.color}`,
+              }}
           onClick={() => onSelect(plan.id)}
-          disabled={isCurrentPlan}
+          disabled={isCurrentPlan || !!loadingPlan}
         >
-          {isCurrentPlan ? '✅ Active Plan' : plan.id === 'free_trial' ? '⚡ Start Free Trial' : `Choose ${plan.name}`}
+          {isLoading
+            ? <><span className={styles.btnSpinner} /> Processing...</>
+            : isCurrentPlan
+            ? '✅ Active Plan'
+            : plan.id === 'free_trial'
+            ? '⚡ Start Free Trial'
+            : `Choose ${plan.name}`}
         </button>
       </div>
     </div>
   );
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PricingPage() {
   const navigate = useNavigate();
-  const { state, dispatch } = useSubscription();
-  const [selected, setSelected] = useState(null);
-  const [confirming, setConfirming] = useState(false);
+  const { state, dispatch, isActive } = useSubscription();
 
-  function handleSelect(planId) {
-    setSelected(planId);
-    setConfirming(true);
-  }
+  const [loadingPlan, setLoadingPlan]   = useState(null);
+  const [paymentError, setPaymentError] = useState('');
+  const [successInfo, setSuccessInfo]   = useState(null);
 
-  function handleConfirm() {
-    dispatch({ type: 'ACTIVATE_PLAN', payload: { planId: selected } });
-    // After activating, go to dashboard
-    navigate('/dashboard', { replace: true });
-  }
+  // ── Select / pay for a plan ───────────────────────────────────────────────
+  async function handleSelect(planId) {
+    setPaymentError('');
 
-  function handleBack() {
-    // Go back to dashboard if already have a plan, else go home
-    if (state.planId) {
-      navigate('/dashboard');
-    } else {
-      navigate('/');
+    // Free trial — no payment, activate immediately
+    if (planId === 'free_trial') {
+      dispatch({ type: 'ACTIVATE_PLAN', payload: { planId } });
+      navigate('/dashboard', { replace: true });
+      return;
     }
+
+    setLoadingPlan(planId);
+
+    try {
+      // 1. Load Razorpay script
+      const loaded = await loadRazorpayScript();
+      if (!loaded) throw new Error('Failed to load Razorpay. Check your internet connection.');
+
+      // 2. Create order on backend
+      const order = await paymentsAPI.createOrder(planId);
+
+      // 3. Open Razorpay checkout
+      await new Promise((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key:         order.key_id,
+          amount:      order.amount,
+          currency:    order.currency,
+          name:        'EvalAI Grader',
+          description: `${order.plan_name} Plan Subscription`,
+          order_id:    order.order_id,
+          theme:       { color: planId === 'gold' ? '#D97706' : '#64748B' },
+          handler: async (response) => {
+            try {
+              // 4. Verify payment + save to MongoDB
+              const result = await paymentsAPI.verifyPayment(
+                response.razorpay_order_id,
+                response.razorpay_payment_id,
+                response.razorpay_signature,
+                planId,
+              );
+
+              // 5. Activate plan in context (also saves to localStorage via new SubscriptionContext)
+              dispatch({ type: 'ACTIVATE_PLAN', payload: { planId } });
+
+              setSuccessInfo({
+                planName:  result.plan_name,
+                amount:    result.amount_display,
+                paymentId: result.payment_id,
+                planId,
+              });
+              resolve();
+            } catch (err) {
+              reject(new Error(err.message || 'Payment verification failed'));
+            }
+          },
+          modal: { ondismiss: () => reject(new Error('DISMISSED')) },
+        });
+
+        rzp.on('payment.failed', (resp) => {
+          reject(new Error(resp.error?.description || 'Payment failed'));
+        });
+        rzp.open();
+      });
+
+    } catch (err) {
+      if (err.message !== 'DISMISSED') {
+        setPaymentError(err.message || 'Payment failed. Please try again.');
+      }
+    } finally {
+      setLoadingPlan(null);
+    }
+  }
+
+  // After success modal → go to dashboard
+  function handleContinue() {
+    navigate('/dashboard', { replace: true });
   }
 
   return (
     <div className={styles.page}>
+      {/* Background */}
       <div className={styles.bg}>
         <div className={styles.bgBlob1} />
         <div className={styles.bgBlob2} />
@@ -117,9 +199,13 @@ export default function PricingPage() {
       </div>
 
       <div className={styles.inner}>
+        {/* Header */}
         <div className={styles.pageHeader}>
-          {/* ← use navigate instead of onBack prop */}
-          <button className={styles.backBtn} onClick={handleBack}>← Back to Dashboard</button>
+          {isActive && (
+            <button className={styles.backBtn} onClick={() => navigate('/dashboard')}>
+              ← Back to Dashboard
+            </button>
+          )}
 
           <div className={styles.headerTag}>💳 Subscription Plans</div>
           <h1 className={styles.pageTitle}>
@@ -144,6 +230,15 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* Error banner */}
+        {paymentError && (
+          <div className={styles.errorBanner}>
+            ⚠️ {paymentError}
+            <button className={styles.errorClose} onClick={() => setPaymentError('')}>✕</button>
+          </div>
+        )}
+
+        {/* Plan Cards */}
         <div className={styles.cardsRow}>
           {Object.values(PLANS).map((plan, i) => (
             <PlanCard
@@ -151,6 +246,7 @@ export default function PricingPage() {
               plan={plan}
               isCurrentPlan={state.planId === plan.id}
               onSelect={handleSelect}
+              loadingPlan={loadingPlan}
               animDelay={i * 0.12}
             />
           ))}
@@ -169,13 +265,13 @@ export default function PricingPage() {
               ))}
             </div>
             {[
-              { label: '📚 Subject Manager', key: 'subjects' },
-              { label: '🎯 Evaluation Engine', key: 'evaluation' },
-              { label: '📄 PDF OCR Tools', key: 'pdf' },
-              { label: '📊 Analytics', key: 'analytics' },
-              { label: '⚙️ Settings', key: 'settings' },
-              { label: '✉️ Email Reports', vals: [true, false, true] },
-              { label: '🎓 Priority Support', vals: [false, false, true] },
+              { label: '📚 Subject Manager',   key: 'subjects' },
+              { label: '🎯 Evaluation Engine',  key: 'evaluation' },
+              { label: '📄 PDF OCR Tools',      key: 'pdf' },
+              { label: '📊 Analytics',          key: 'analytics' },
+              { label: '⚙️ Settings',           key: 'settings' },
+              { label: '✉️ Email Reports',      vals: [true, false, true] },
+              { label: '🎓 Priority Support',   vals: [false, false, true] },
               { label: '👥 Unlimited Students', vals: [false, false, true] },
             ].map((row, i) => (
               <div key={i} className={`${styles.compareRow} ${i % 2 === 0 ? styles.compareRowAlt : ''}`}>
@@ -193,11 +289,11 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* FAQ strip */}
+        {/* FAQ */}
         <div className={styles.faqStrip}>
           {[
             { q: 'No credit card for trial?', a: 'Correct — start free, no card needed.' },
-            { q: 'Can I upgrade anytime?', a: 'Yes, upgrade instantly from Silver to Gold.' },
+            { q: 'Can I upgrade anytime?',    a: 'Yes, upgrade instantly from Silver to Gold.' },
             { q: 'What happens after trial?', a: 'Access is paused until you pick a plan.' },
           ].map(f => (
             <div key={f.q} className={styles.faqItem}>
@@ -208,32 +304,57 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* Confirm Modal */}
-      {confirming && selected && (
-        <div className={styles.modalOverlay} onClick={() => setConfirming(false)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalIcon}>{PLANS[selected].badge}</div>
-            <h3 className={styles.modalTitle}>Activate {PLANS[selected].name} Plan?</h3>
+      {/* ── Payment Success Modal ───────────────────────────────────────────── */}
+      {successInfo && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.successIcon}>🎉</div>
+            <h3 className={styles.modalTitle}>Payment Successful!</h3>
             <p className={styles.modalSub}>
-              {PLANS[selected].id === 'free_trial'
-                ? 'You will get full access for 5 days — completely free.'
-                : `You will be charged ${PLANS[selected].priceLabel}/month. Services: ${PLANS[selected].allowedTabs.map(t => TAB_META[t].label).join(', ')}.`}
+              Your <strong>{successInfo.planName}</strong> plan is now active.
             </p>
-            <div className={styles.modalAccessList}>
-              {Object.entries(TAB_META).map(([tabId, meta]) => {
-                const allowed = PLANS[selected].allowedTabs.includes(tabId);
-                return (
-                  <span key={tabId} className={`${styles.modalAccessChip} ${allowed ? styles.chipAllowed : styles.chipLocked}`}>
-                    {meta.icon} {meta.label}
-                  </span>
-                );
-              })}
+
+            <div className={styles.paymentReceipt}>
+              <div className={styles.receiptRow}>
+                <span className={styles.receiptLabel}>Plan</span>
+                <span className={styles.receiptVal}>
+                  {PLANS[successInfo.planId].badge} {successInfo.planName}
+                </span>
+              </div>
+              <div className={styles.receiptRow}>
+                <span className={styles.receiptLabel}>Amount Paid</span>
+                <span className={styles.receiptVal} style={{ color: '#16A34A', fontWeight: 700 }}>
+                  {successInfo.amount}
+                </span>
+              </div>
+              <div className={styles.receiptRow}>
+                <span className={styles.receiptLabel}>Payment ID</span>
+                <span className={styles.receiptVal} style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                  {successInfo.paymentId}
+                </span>
+              </div>
+              <div className={styles.receiptRow}>
+                <span className={styles.receiptLabel}>Status</span>
+                <span className={styles.receiptVal} style={{ color: '#16A34A' }}>✅ Confirmed & Saved</span>
+              </div>
             </div>
+
+            <div className={styles.modalAccessList}>
+              {PLANS[successInfo.planId].allowedTabs.map(tabId => (
+                <span key={tabId} className={`${styles.modalAccessChip} ${styles.chipAllowed}`}>
+                  {TAB_META[tabId].icon} {TAB_META[tabId].label}
+                </span>
+              ))}
+            </div>
+
             <div className={styles.modalActions}>
-              <button className={styles.modalConfirm} style={{ background: PLANS[selected].color }} onClick={handleConfirm}>
-                ✅ Confirm &amp; Activate
+              <button
+                className={styles.modalConfirm}
+                style={{ background: PLANS[successInfo.planId].color }}
+                onClick={handleContinue}
+              >
+                🚀 Go to Dashboard
               </button>
-              <button className={styles.modalCancel} onClick={() => setConfirming(false)}>Cancel</button>
             </div>
           </div>
         </div>

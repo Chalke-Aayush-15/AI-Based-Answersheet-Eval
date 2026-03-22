@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, evaluations
+from app.routes import auth, evaluations, payments
 from app.database import connect_db, disconnect_db
 
 app = FastAPI(title="AI Answer Sheet Evaluator API", version="1.0.0")
@@ -13,8 +13,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(auth.router,        prefix="/api/auth",        tags=["Authentication"])
 app.include_router(evaluations.router, prefix="/api/evaluations", tags=["Evaluations"])
+app.include_router(payments.router,    prefix="/api/payments",    tags=["Payments"])
 
 @app.on_event("startup")
 async def startup():

@@ -19,16 +19,24 @@ export default function Sidebar({ onOpenPricing }) {
   const plan = subState.planId ? PLANS[subState.planId] : null;
   const user = state.authUser;
 
-  function handleLogout() {
+  async function handleLogout() {
     if (window.confirm('Sign out of EvalAI?')) {
+      try {
+        await fetch('http://localhost:3000/logout', {
+          method: 'GET',
+          credentials: 'include',
+        });
+      } catch (error) {
+        console.error('Logout API call failed:', error);
+      }
       logout();
-      navigate('/', { replace: true });   // ← go to home after logout
+      navigate('/', { replace: true });
     }
   }
 
   function handleTabClick(tabId) {
     dispatch({ type: 'SET_TAB', payload: tabId });
-    navigate(`/dashboard/${tabId}`);      // ← update URL when tab changes
+    navigate(`/dashboard/${tabId}`);
   }
 
   return (
@@ -54,7 +62,7 @@ export default function Sidebar({ onOpenPricing }) {
             <span className={styles.userName}>{user.name}</span>
             <span className={styles.userEmail}>{user.email}</span>
           </div>
-          <button className={styles.logoutBtn} onClick={handleLogout} title="Sign out">⏻</button>
+          {/* Logout button removed from here */}
         </div>
       )}
 
@@ -79,7 +87,7 @@ export default function Sidebar({ onOpenPricing }) {
 
       <div className={styles.divider} />
 
-      {/* Navigation — each item updates the URL */}
+      {/* Navigation */}
       <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => {
           const locked = plan ? !canAccess(plan.id, item.id) : true;
@@ -111,9 +119,19 @@ export default function Sidebar({ onOpenPricing }) {
       )}
 
       <div className={styles.sidebarFooter}>
-        <button className={styles.pricingLink} onClick={onOpenPricing}>💳 Manage Subscription</button>
-        <p className={styles.versionTag}>v2.0 — FAIR Eval</p>
-      </div>
+      {/* 1. Text Link */}
+      <button className={styles.pricingLink} onClick={onOpenPricing}>
+        💳 Manage Subscription
+      </button>
+      
+      {/* 2. Boxed Button */}
+      <button className={styles.logoutBtn} onClick={handleLogout}>
+        ⏻ Logout
+      </button>
+
+      {/* 3. Version Tag */}
+      <p className={styles.versionTag}>v2.0 — FAIR Eval</p>
+    </div>
     </aside>
   );
 }
