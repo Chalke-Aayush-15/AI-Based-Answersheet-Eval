@@ -1,57 +1,90 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { ocrAPI, evaluationAPI } from '../services/api';
 import styles from './PDFTools.module.css';
 
 export default function PDFTools() {
   const { state, dispatch } = useApp();
-  const [processing, setProcessing] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [dragging, setDragging] = useState(false);
 
-  function addLogs(messages) {
-    messages.forEach((text, i) => {
-      setTimeout(() => {
-        dispatch({ type: 'ADD_PDF_LOG', payload: { text, time: new Date().toLocaleTimeString() } });
-      }, i * 150);
+  const [processing,     setProcessing]     = useState(false);
+  const [selectedFiles,  setSelectedFiles]  = useState([]);   // File[]
+  const [dragging,       setDragging]       = useState(false);
+  const [forceOcr,       setForceOcr]       = useState(false);
+  const [results,        setResults]        = useState([]);   // OCR result objects
+  const [resultFiles,    setResultFiles]    = useState([]);   // available downloads
+
+  // ── Log helper ────────────────────────────────────────────────────────────
+  function addLog(text) {
+    dispatch({
+      type: 'ADD_PDF_LOG',
+      payload: { text, time: new Date().toLocaleTimeString() },
     });
   }
 
-  function handleProcess() {
+  // ── Process PDFs via real API ─────────────────────────────────────────────
+  async function handleProcess() {
     if (!selectedFiles.length) return alert('Please select PDF files to process.');
+
     setProcessing(true);
+    setResults([]);
     dispatch({ type: 'CLEAR_PDF_LOGS' });
 
-    const logs = [
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      '🔍 Starting OCR PDF Processing...',
-      `📂 Files to process: ${selectedFiles.length}`,
-      `🔑 API Key: ${state.settings.ocrApiKey.slice(0, 8)}***`,
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      ...selectedFiles.flatMap(f => [
-        `\n📄 Processing: ${f.name}`,
-        `   ✂️  Splitting into 3-page chunks...`,
-        `   🌐 Sending chunk 1 to OCR API...`,
-        `   ✅ Chunk 1 extracted (1,240 chars)`,
-        `   🌐 Sending chunk 2 to OCR API...`,
-        `   ✅ Chunk 2 extracted (980 chars)`,
-        `   📝 Creating searchable PDF...`,
-        `   ✅ Saved: ${f.name.replace('.pdf','')}_extracted.pdf`,
-      ]),
-      '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      '🎉 OCR Processing Complete!',
-      `✅ Successfully processed: ${selectedFiles.length} file(s)`,
-      `📁 Output directory: ${state.settings.outputDir}`,
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    ];
+    addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    addLog('🔍 Starting NVIDIA NIM OCR Processing...');
+    addLog(`📂 Files: ${selectedFiles.length}`);
+    addLog(`🔑 Force OCR: ${forceOcr ? 'YES' : 'NO (auto-detect)'}`);
+    addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    logs.forEach((text, i) => {
-      setTimeout(() => {
-        dispatch({ type: 'ADD_PDF_LOG', payload: { text, time: new Date().toLocaleTimeString() } });
-        if (i === logs.length - 1) setProcessing(false);
-      }, i * 120);
-    });
+    try {
+      const batchResults = [];
+
+      if (selectedFiles.length === 1) {
+        // ── Single file ───────────────────────────────────────────────────
+        const f = selectedFiles[0];
+        addLog(`\n📄 Processing: ${f.name}`);
+        addLog('   📡 Uploading to FastAPI /ocr/extract-text...');
+
+        const data = await ocrAPI.extractText(f, forceOcr, (line) => addLog(`   ${line}`));
+
+        addLog(`   ✅ Method: ${data.method_used}`);
+        addLog(`   📊 Extracted: ${data.char_count} characters`);
+        batchResults.push({ filename: data.filename, method: data.method_used, chars: data.char_count, text: data.text });
+
+      } else {
+        // ── Batch ─────────────────────────────────────────────────────────
+        addLog(`\n📡 Uploading ${selectedFiles.length} files to /ocr/extract-text-batch...`);
+        const data = await ocrAPI.extractBatch(selectedFiles, forceOcr);
+
+        data.results.forEach(r => {
+          const icon = r.success ? '✅' : '❌';
+          addLog(`${icon} ${r.filename} — ${r.char_count} chars via ${r.method_used}`);
+          batchResults.push({ filename: r.filename, method: r.method_used, chars: r.char_count, text: r.text, success: r.success });
+        });
+      }
+
+      setResults(batchResults);
+
+      // Refresh downloadable result files list
+      try {
+        const listData = await evaluationAPI.listResults();
+        setResultFiles(listData.files || []);
+      } catch (_) {}
+
+      addLog('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      addLog('🎉 OCR Processing Complete!');
+      addLog(`✅ Processed: ${batchResults.length} file(s)`);
+      addLog(`📁 Output directory: ${state.settings.outputDir || 'extracted_pdfs'}`);
+      addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    } catch (err) {
+      addLog(`\n❌ Error: ${err.message}`);
+      addLog('💡 Is the backend running? uvicorn main:app --reload');
+    } finally {
+      setProcessing(false);
+    }
   }
 
+  // ── Drag-and-drop ─────────────────────────────────────────────────────────
   function handleDrop(e) {
     e.preventDefault();
     setDragging(false);
@@ -59,21 +92,35 @@ export default function PDFTools() {
     setSelectedFiles(prev => [...prev, ...files]);
   }
 
+  // ── Download result file ──────────────────────────────────────────────────
+  async function handleDownload(filename) {
+    try {
+      await evaluationAPI.downloadFile(filename);
+    } catch (err) {
+      alert(`Download failed: ${err.message}`);
+    }
+  }
+
+  // ── Copy extracted text to clipboard ─────────────────────────────────────
+  function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>PDF Tools</h1>
-          <p className={styles.subtitle}>OCR extraction, text recognition &amp; searchable PDF generation</p>
+          <p className={styles.subtitle}>OCR extraction via NVIDIA NIM + text recognition</p>
         </div>
         <div className={styles.apiStatus}>
           <span className={styles.apiDot} />
-          <span>OCR.space API Connected</span>
+          <span>NVIDIA NIM OCR</span>
         </div>
       </div>
 
       <div className={styles.layout}>
-        {/* Upload Section */}
+        {/* ── Upload Section ─────────────────────────────────────────────── */}
         <div className={styles.uploadSection}>
           <div className={styles.card}>
             <div className={styles.cardTitle}>📂 Upload PDFs for OCR</div>
@@ -103,7 +150,9 @@ export default function PDFTools() {
               <div className={styles.fileList}>
                 <div className={styles.fileListHeader}>
                   <span>{selectedFiles.length} file(s) selected</span>
-                  <button className={styles.clearFilesBtn} onClick={() => setSelectedFiles([])}>Clear All</button>
+                  <button className={styles.clearFilesBtn} onClick={() => setSelectedFiles([])}>
+                    Clear All
+                  </button>
                 </div>
                 {selectedFiles.map((f, i) => (
                   <div key={i} className={styles.fileItem}>
@@ -125,32 +174,37 @@ export default function PDFTools() {
           {/* OCR Settings */}
           <div className={styles.card}>
             <div className={styles.cardTitle}>🔧 OCR Settings</div>
-            <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>API Key</label>
-              <input
-                className={styles.settingInput}
-                type="password"
-                value={state.settings.ocrApiKey}
-                onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { ocrApiKey: e.target.value } })}
-                placeholder="OCR.space API Key"
-              />
-            </div>
+
             <div className={styles.settingRow}>
               <label className={styles.settingLabel}>Output Directory</label>
               <input
                 className={styles.settingInput}
                 type="text"
-                value={state.settings.outputDir}
-                onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { outputDir: e.target.value } })}
+                value={state.settings.outputDir || 'extracted_pdfs'}
+                onChange={(e) =>
+                  dispatch({ type: 'UPDATE_SETTINGS', payload: { outputDir: e.target.value } })
+                }
               />
             </div>
+
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>Pages per Chunk</label>
-              <select className={styles.settingSelect}>
-                <option>3</option>
-                <option>5</option>
-                <option>10</option>
-              </select>
+              <label className={styles.settingLabel}>Force OCR</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={forceOcr}
+                  onChange={(e) => setForceOcr(e.target.checked)}
+                />
+                <span style={{ fontSize: 12, color: '#6B7280' }}>
+                  Always use NVIDIA NIM (skip PyPDF2 fast-path)
+                </span>
+              </label>
+            </div>
+
+            <div style={{ marginTop: 8, padding: '8px 10px', background: '#F0FDF4', borderRadius: 6, fontSize: 11, color: '#166534' }}>
+              <strong>Engine:</strong> NVIDIA NIM <code>llama-3.2-11b-vision-instruct</code>
+              <br />
+              <strong>Fallback:</strong> PyPDF2 (digital PDFs)
             </div>
           </div>
 
@@ -159,32 +213,94 @@ export default function PDFTools() {
             onClick={handleProcess}
             disabled={processing}
           >
-            {processing ? (
-              <><span className={styles.spinner} /> Processing OCR...</>
-            ) : (
-              '🔍 Process PDFs with OCR'
-            )}
+            {processing
+              ? <><span className={styles.spinner} /> Processing OCR...</>
+              : '🔍 Process PDFs with OCR'
+            }
           </button>
+
+          {/* OCR Results Preview */}
+          {results.length > 0 && (
+            <div className={styles.card} style={{ marginTop: 12 }}>
+              <div className={styles.cardTitle}>📋 Extraction Results</div>
+              {results.map((r, i) => (
+                <div key={i} style={{ marginBottom: 12, padding: '10px 12px', background: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <strong style={{ fontSize: 12 }}>📄 {r.filename}</strong>
+                    <span style={{ fontSize: 11, color: '#6B7280' }}>{r.method} · {r.chars} chars</span>
+                  </div>
+                  <div style={{
+                    fontSize: 11, color: '#374151', maxHeight: 80, overflowY: 'auto',
+                    fontFamily: 'monospace', whiteSpace: 'pre-wrap', background: '#fff',
+                    padding: 6, borderRadius: 4, border: '1px solid #E5E7EB',
+                  }}>
+                    {(r.text || '').slice(0, 400)}{r.text?.length > 400 ? '…' : ''}
+                  </div>
+                  <button
+                    onClick={() => copyText(r.text)}
+                    style={{ marginTop: 6, fontSize: 11, padding: '3px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid #D1D5DB', background: '#fff' }}
+                  >
+                    📋 Copy Text
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Downloadable files list */}
+          {resultFiles.length > 0 && (
+            <div className={styles.card} style={{ marginTop: 12 }}>
+              <div className={styles.cardTitle}>📁 Result Files</div>
+              {resultFiles.map((f, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #F3F4F6' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: '#374151' }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: '#9CA3AF' }}>{f.size_kb} KB</div>
+                  </div>
+                  <button
+                    onClick={() => handleDownload(f.name)}
+                    style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid #16A34A', color: '#16A34A', background: '#F0FDF4' }}
+                  >
+                    📥 Download
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Log */}
+        {/* ── Log Panel ─────────────────────────────────────────────────── */}
         <div className={styles.logPanel}>
           <div className={styles.logHeader}>
             <span className={styles.logTitle}>📜 OCR Processing Log</span>
-            <button className={styles.logClearBtn} onClick={() => dispatch({ type: 'CLEAR_PDF_LOGS' })}>Clear</button>
+            <button className={styles.logClearBtn} onClick={() => dispatch({ type: 'CLEAR_PDF_LOGS' })}>
+              Clear
+            </button>
           </div>
           <div className={styles.logBody}>
             {state.pdfLogs.length === 0 ? (
               <div className={styles.logEmpty}>
                 <span>📄</span>
                 <p>OCR log will appear here after processing starts</p>
+                <small style={{ color: '#9CA3AF', marginTop: 8 }}>
+                  API: <code>http://127.0.0.1:8000/ocr/extract-text</code>
+                </small>
               </div>
             ) : (
               state.pdfLogs.map((entry, i) => {
-                const isOk = entry.text.includes('✅') || entry.text.includes('🎉');
+                const isOk     = entry.text.includes('✅') || entry.text.includes('🎉');
+                const isErr    = entry.text.includes('❌');
                 const isBorder = entry.text.startsWith('━');
                 return (
-                  <div key={i} className={`${styles.logEntry} ${isOk ? styles.logOk : ''} ${isBorder ? styles.logBorder : ''}`}>
+                  <div
+                    key={i}
+                    className={[
+                      styles.logEntry,
+                      isOk     ? styles.logOk     : '',
+                      isErr    ? styles.logErr    : '',
+                      isBorder ? styles.logBorder : '',
+                    ].join(' ')}
+                  >
                     <span className={styles.logTs}>{entry.time}</span>
                     <span className={styles.logText}>{entry.text}</span>
                   </div>

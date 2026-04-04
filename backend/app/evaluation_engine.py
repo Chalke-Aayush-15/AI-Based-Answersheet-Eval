@@ -47,7 +47,7 @@ except ImportError:
     SEMANTIC_AVAILABLE = False
 
 # ── Poppler (Windows only) ────────────────────────────────────────────────────
-POPPLER_PATH = os.getenv("POPPLER_PATH", None)   # Set via env var on Windows
+POPPLER_PATH = r"C:\poppler\poppler-25.12.0\Library\bin"   # Set via env var on Windows
 
 
 # ===========================================================================

@@ -224,7 +224,7 @@ export default function HomePage() {
       {NAV_LINKS.map(l => (
         <a
           key={l}
-          href={`#${l.toLowerCase().replace(' ', '-')}`}
+          href={`#${l.toLowerCase().replaceAll(' ', '-')}`}
           className={styles.navLink}
           onClick={() => setMenuOpen(false)}
         >
