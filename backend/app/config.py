@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # ── MongoDB ─────────────────────────────────────────────
-    MONGODB_URL: str = "mongodb://localhost:27017"
+    MONGODB_URL: str = "mongodb+srv://aayushchalke1501_db_user:Aayush2005@aieval.zmnuh7g.mongodb.net/?appName=AiEval"
     DATABASE_NAME: str = "answersheet_eval"
 
     # ── JWT ─────────────────────────────────────────────────
@@ -17,15 +17,15 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_SECRET: str = "Xfnuzq63VzhCibfFXFfycWhV"
 
     # ── NVIDIA OCR ──────────────────────────────────────────
-    NVIDIA_API_KEY: str = ""
+    NVIDIA_API_KEY: str = "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"
 
     # ── Email ───────────────────────────────────────────────
-    SENDER_EMAIL: str = ""
-    APP_PASSWORD: str = ""
+    SENDER_EMAIL: str = "nitesh.t.mulam2004@gmail.com"
+    APP_PASSWORD: str = "gxdd zdyh gfym mlcq"
 
     # ── File handling ───────────────────────────────────────
     OUTPUT_DIR: str = "extracted_pdfs"
-    POPPLER_PATH: str = ""
+    POPPLER_PATH: str = "C:\poppler\poppler-25.12.0\Library\bin"
 
     class Config:
         env_file = ".env"

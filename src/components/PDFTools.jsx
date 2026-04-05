@@ -64,10 +64,21 @@ export default function PDFTools() {
 
       setResults(batchResults);
 
-      // Refresh downloadable result files list
+      // Generate local .txt downloads from extracted text
+      addLog('\n📝 Generating text file(s) for download...');
+      generateTextFiles(batchResults);
+
+      // Refresh downloadable result files list from server (best-effort)
       try {
         const listData = await evaluationAPI.listResults();
-        setResultFiles(listData.files || []);
+        // Merge server files with locally generated ones (keep local ones too)
+        setResultFiles((prev) => {
+          const serverFiles = (listData.files || []).map((f) => ({ ...f, isLocal: false }));
+          const localFiles  = prev.filter((f) => f.isLocal);
+          // Deduplicate by name, preferring local
+          const localNames  = new Set(localFiles.map((f) => f.name));
+          return [...localFiles, ...serverFiles.filter((f) => !localNames.has(f.name))];
+        });
       } catch (_) {}
 
       addLog('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -93,9 +104,17 @@ export default function PDFTools() {
   }
 
   // ── Download result file ──────────────────────────────────────────────────
-  async function handleDownload(filename) {
+  async function handleDownload(file) {
+    if (file.isLocal && file.url) {
+      // Local blob — trigger browser download directly
+      const a = document.createElement('a');
+      a.href = file.url;
+      a.download = file.name;
+      a.click();
+      return;
+    }
     try {
-      await evaluationAPI.downloadFile(filename);
+      await evaluationAPI.downloadFile(file.name);
     } catch (err) {
       alert(`Download failed: ${err.message}`);
     }
@@ -104,6 +123,42 @@ export default function PDFTools() {
   // ── Copy extracted text to clipboard ─────────────────────────────────────
   function copyText(text) {
     navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
+  }
+
+  // ── Generate .txt file(s) from extracted text and add to Result Files ─────
+  function generateTextFiles(batchResults) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const isBatch = batchResults.length > 1;
+
+    batchResults.forEach((r) => {
+      const baseName = r.filename.replace(/\.pdf$/i, '');
+      const fileName = isBatch
+        ? `${baseName}_extracted_${timestamp}.txt`
+        : `${baseName}_extracted.txt`;
+
+      const header = [
+        '═══════════════════════════════════════════════════',
+        `FILE    : ${r.filename}`,
+        `METHOD  : ${r.method}`,
+        `CHARS   : ${r.chars}`,
+        `EXPORTED: ${new Date().toLocaleString()}`,
+        '═══════════════════════════════════════════════════',
+        '',
+      ].join('\n');
+
+      const content = header + (r.text || '');
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const sizeKb = (blob.size / 1024).toFixed(1);
+      const url = URL.createObjectURL(blob);
+
+      setResultFiles((prev) => [
+        // replace if same name already exists (re-run scenario)
+        ...prev.filter((f) => f.name !== fileName),
+        { name: fileName, size_kb: sizeKb, url, isLocal: true },
+      ]);
+
+      addLog(`   📝 Text file ready: ${fileName} (${sizeKb} KB)`);
+    });
   }
 
   return (
@@ -258,7 +313,7 @@ export default function PDFTools() {
                     <div style={{ fontSize: 11, color: '#9CA3AF' }}>{f.size_kb} KB</div>
                   </div>
                   <button
-                    onClick={() => handleDownload(f.name)}
+                    onClick={() => handleDownload(f)}
                     style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', borderRadius: 4, border: '1px solid #16A34A', color: '#16A34A', background: '#F0FDF4' }}
                   >
                     📥 Download
