@@ -44,14 +44,16 @@ function GuestOnly({ children }) {
 
 // ── Pricing guard: already has active plan → skip pricing, go to /dashboard ──
 function RequirePlan({ children }) {
-  const { isActive } = useSubscription();
+  const { isActive, state } = useSubscription();
+  if (state.planLoading) return <FullPageSpinner />;
   if (isActive) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
 // ── Dashboard guard: no active plan → go choose one at /pricing ──────────────
 function RequireActivePlan({ children }) {
-  const { isActive } = useSubscription();
+  const { isActive, state } = useSubscription();
+  if (state.planLoading) return <FullPageSpinner />;
   if (!isActive) return <Navigate to="/pricing" replace />;
   return children;
 }

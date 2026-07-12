@@ -105,7 +105,7 @@ function PlanCard({ plan, isCurrentPlan, onSelect, loadingPlan, animDelay }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PricingPage() {
   const navigate = useNavigate();
-  const { state, dispatch, isActive } = useSubscription();
+  const { state, dispatch, isActive, activatePlan } = useSubscription();
 
   const [loadingPlan, setLoadingPlan]   = useState(null);
   const [paymentError, setPaymentError] = useState('');
@@ -117,7 +117,7 @@ export default function PricingPage() {
 
     // Free trial — no payment, activate immediately
     if (planId === 'free_trial') {
-      dispatch({ type: 'ACTIVATE_PLAN', payload: { planId } });
+      activatePlan(planId);
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -152,8 +152,9 @@ export default function PricingPage() {
                 planId,
               );
 
-              // 5. Activate plan in context (also saves to localStorage via new SubscriptionContext)
-              dispatch({ type: 'ACTIVATE_PLAN', payload: { planId } });
+              // inside the Razorpay handler, after paymentsAPI.verifyPayment succeeds
+              // 5. Activate plan in context (also persists per-user to localStorage)
+              activatePlan(planId);
 
               setSuccessInfo({
                 planName:  result.plan_name,

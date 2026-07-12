@@ -1,12 +1,15 @@
-import { createContext, useContext, useReducer } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { canAccess, isTrialExpired, trialDaysRemaining } from './plans';
+import { paymentsAPI } from '../services/api';
+import { useApp } from '../context/AppContext';
 
-// ── Persist helpers ───────────────────────────────────────────────────────────
-const STORAGE_KEY = 'evalai_subscription';
+function storageKey(userId) {
+  return `evalai_subscription_${userId || 'anon'}`;
+}
 
-function loadFromStorage() {
+function loadFromStorage(userId) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(userId));
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -14,35 +17,38 @@ function loadFromStorage() {
   }
 }
 
-function saveToStorage(planId, activatedAt) {
+function saveToStorage(userId, planId, activatedAt) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ planId, activatedAt }));
+    localStorage.setItem(storageKey(userId), JSON.stringify({ planId, activatedAt }));
   } catch {}
 }
 
-function clearStorage() {
+function clearStorage(userId) {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(storageKey(userId));
   } catch {}
 }
-
-// ── Initial state — hydrate from localStorage on load ─────────────────────────
-const persisted = loadFromStorage();
 
 const initialState = {
-  planId:      persisted?.planId      ?? null,
-  activatedAt: persisted?.activatedAt ?? null,
+  planId:      null,
+  activatedAt: null,
+  planLoading: true,
   showPricing: false,
   lockedTab:   null,
 };
 
-// ── Reducer ───────────────────────────────────────────────────────────────────
 function reducer(state, action) {
   switch (action.type) {
+    case 'HYDRATE_PLAN':
+      return {
+        ...state,
+        planId:      action.payload.planId,
+        activatedAt: action.payload.activatedAt,
+        planLoading: false,
+      };
     case 'ACTIVATE_PLAN': {
       const { planId } = action.payload;
       const activatedAt = Date.now();
-      saveToStorage(planId, activatedAt);           // ← persist immediately
       return { ...state, planId, activatedAt, showPricing: false, lockedTab: null };
     }
     case 'OPEN_PRICING':
@@ -50,18 +56,61 @@ function reducer(state, action) {
     case 'CLOSE_PRICING':
       return { ...state, showPricing: false, lockedTab: null };
     case 'CANCEL_PLAN':
-      clearStorage();
       return { ...state, planId: null, activatedAt: null };
+    case 'RESET_FOR_LOGOUT':
+      return { ...initialState, planLoading: false };
     default:
       return state;
   }
 }
 
-// ── Context ───────────────────────────────────────────────────────────────────
 const SubscriptionContext = createContext(null);
 
 export function SubscriptionProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const { state: appState } = useApp();
+  const authUser = appState.authUser;
+  const authChecked = appState.authChecked;
+  const userId = authUser?.id || authUser?._id || authUser?.email || null;
+
+  const lastFetchedUserId = useRef(null);
+
+  useEffect(() => {
+    if (!authChecked) return;
+
+    if (!authUser) {
+      lastFetchedUserId.current = null;
+      dispatch({ type: 'RESET_FOR_LOGOUT' });
+      return;
+    }
+
+    if (lastFetchedUserId.current === userId) return;
+    lastFetchedUserId.current = userId;
+
+    const cached = loadFromStorage(userId);
+    if (cached?.planId) {
+      dispatch({ type: 'ACTIVATE_PLAN', payload: { planId: cached.planId } });
+    }
+
+    paymentsAPI
+      .status()
+      .then((res) => {
+        const planId = res?.planId ?? null;
+        const activatedAt = res?.activatedAt ?? null;
+        dispatch({ type: 'HYDRATE_PLAN', payload: { planId, activatedAt } });
+        if (planId) {
+          saveToStorage(userId, planId, activatedAt);
+        } else {
+          clearStorage(userId);
+        }
+      })
+      .catch(() => {
+        dispatch({
+          type: 'HYDRATE_PLAN',
+          payload: { planId: cached?.planId ?? null, activatedAt: cached?.activatedAt ?? null },
+        });
+      });
+  }, [authUser, authChecked, userId]);
 
   const isActive =
     state.planId !== null &&
@@ -84,8 +133,20 @@ export function SubscriptionProvider({ children }) {
     return true;
   }
 
+  function activatePlan(planId) {
+    saveToStorage(userId, planId, Date.now());
+    dispatch({ type: 'ACTIVATE_PLAN', payload: { planId } });
+  }
+
+  function cancelPlan() {
+    clearStorage(userId);
+    dispatch({ type: 'CANCEL_PLAN' });
+  }
+
   return (
-    <SubscriptionContext.Provider value={{ state, dispatch, isActive, daysLeft, checkAccess }}>
+    <SubscriptionContext.Provider
+      value={{ state, dispatch, isActive, daysLeft, checkAccess, activatePlan, cancelPlan }}
+    >
       {children}
     </SubscriptionContext.Provider>
   );

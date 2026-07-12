@@ -133,6 +133,29 @@ async def verify_payment(
         "message":     f"{plan['name']} plan activated successfully!",
     }
 
+@router.get("/status")
+async def subscription_status(current_user: dict = Depends(get_current_user)):
+    """
+    Return the logged-in user's current active plan, based on their most
+    recent successful payment in MongoDB. This is the source of truth —
+    the frontend should not decide subscription status from localStorage alone.
+    """
+    db = get_db()
+    doc = await db.payments.find_one(
+        {"teacher_id": current_user["_id"], "status": "success"},
+        sort=[("paid_at", -1)],
+    )
+
+    if not doc:
+        return {"planId": None, "planName": None, "activatedAt": None}
+
+    return {
+        "planId":      doc["plan_id"],
+        "planName":    doc["plan_name"],
+        # ms epoch, to match Date.now() used on the frontend
+        "activatedAt": int(doc["paid_at"].timestamp() * 1000),
+    }
+
 
 @router.get("/history")
 async def payment_history(current_user: dict = Depends(get_current_user)):

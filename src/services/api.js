@@ -311,6 +311,9 @@ export const paymentsAPI = {
 
   /** Payment history for the logged-in user */
   history: () => apiFetch('/api/payments/history'),
+
+  /** Current subscription status (source of truth from DB), e.g. { planId, planName, activatedAt } */
+  status: () => apiFetch('/api/payments/status'),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
