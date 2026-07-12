@@ -15,21 +15,14 @@ const NAV_ITEMS = [
 export default function Sidebar({ onOpenPricing }) {
   const navigate = useNavigate();
   const { state, dispatch, logout } = useApp();
-  const { state: subState, isActive, daysLeft } = useSubscription();
+  const { state: subState, dispatch: subDispatch, isActive, daysLeft } = useSubscription();
   const plan = subState.planId ? PLANS[subState.planId] : null;
   const user = state.authUser;
 
-  async function handleLogout() {
+  function handleLogout() {
     if (window.confirm('Sign out of EvalAI?')) {
-      try {
-        await fetch('http://localhost:3000/logout', {
-          method: 'GET',
-          credentials: 'include',
-        });
-      } catch (error) {
-        console.error('Logout API call failed:', error);
-      }
-      logout();
+      subDispatch({ type: 'CANCEL_PLAN' });  // clear saved plan so next login shows /pricing
+      logout();                              // clear token + user
       navigate('/', { replace: true });
     }
   }

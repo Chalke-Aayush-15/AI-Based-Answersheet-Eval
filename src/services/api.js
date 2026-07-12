@@ -259,7 +259,7 @@ export const evaluationsAPI = {
    * Aggregate stats.
    * Returns: { total_evaluations, avg_percentage, highest, grade_distribution, subjects[] }
    */
-  stats: () => apiFetch('/evaluations/stats'),
+  stats: () => apiFetch('/api/evaluations/stats'),
 
   /**
    * Paginated list of past evaluation records.
@@ -268,37 +268,38 @@ export const evaluationsAPI = {
   list: (subject = '', skip = 0, limit = 100) => {
     const p = new URLSearchParams({ skip, limit });
     if (subject) p.set('subject', subject);
-    return apiFetch(`/evaluations/?${p}`);
+    return apiFetch(`/api/evaluations/?${p}`);
   },
 
   /** Persist a result record to MongoDB */
   save: (data) =>
-    apiFetch('/evaluations/', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/api/evaluations/', { method: 'POST', body: JSON.stringify(data) }),
 
   /** Fetch a single record by id */
-  get: (id) => apiFetch(`/evaluations/${id}`),
+  get: (id) => apiFetch(`/api/evaluations/${id}`),
 
   /** Delete a record */
-  delete: (id) => apiFetch(`/evaluations/${id}`, { method: 'DELETE' }),
+  delete: (id) => apiFetch(`/api/evaluations/${id}`, { method: 'DELETE' }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAYMENTS  (Razorpay)
-// POST /payments/create-order     — returns { order_id, amount, currency, key_id }
-// POST /payments/verify           — verifies signature, saves record
-// GET  /payments/history          — payment history for current user
+// Mounted in backend/main.py with prefix "/api/payments"
+// POST /api/payments/create-order  — returns { order_id, amount, currency, key_id }
+// POST /api/payments/verify        — verifies signature, saves record
+// GET  /api/payments/history       — payment history for current user
 // ─────────────────────────────────────────────────────────────────────────────
 export const paymentsAPI = {
   /** Step 1 — create a Razorpay order */
   createOrder: (planId) =>
-    apiFetch('/payments/create-order', {
+    apiFetch('/api/payments/create-order', {
       method: 'POST',
       body:   JSON.stringify({ plan_id: planId }),
     }),
 
   /** Step 2 — verify payment signature and persist record */
   verifyPayment: (razorpay_order_id, razorpay_payment_id, razorpay_signature, plan_id) =>
-    apiFetch('/payments/verify', {
+    apiFetch('/api/payments/verify', {
       method: 'POST',
       body:   JSON.stringify({
         razorpay_order_id,
@@ -309,7 +310,7 @@ export const paymentsAPI = {
     }),
 
   /** Payment history for the logged-in user */
-  history: () => apiFetch('/payments/history'),
+  history: () => apiFetch('/api/payments/history'),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
