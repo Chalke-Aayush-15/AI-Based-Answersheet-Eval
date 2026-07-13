@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { evaluationAPI } from '../services/api';
+import { evaluationAPI, evaluationsAPI } from '../services/api';
 import styles from './EvaluationPanel.module.css';
 
 const SCORE_WEIGHTS = [
@@ -166,6 +166,30 @@ export default function EvaluationPanel() {
           dispatch({ type: 'SET_RESULTS_FILE', payload: consolidatedFile });
         }
         setResults(allResults);
+
+        // ── Persist each graded result to MongoDB so it shows up in Analytics ──
+        addLog('\n💾 Saving results to database...');
+        let savedCount = 0;
+        for (const r of allResults) {
+          try {
+            await evaluationsAPI.save({
+              subject_name:    r.Subject,
+              student_name:    r.Name,
+              student_roll_no: r['Roll No'],
+              student_email:   r.Email || null,
+              total_marks:     r['Total Marks'],
+              max_marks:       r['Max Possible'],
+              percentage:      r.Percentage,
+              grade:           r.Grade,
+              question_results: [],
+              metadata: {},
+            });
+            savedCount++;
+          } catch (saveErr) {
+            addLog(`   ⚠️  Failed to save record for ${r.Name}: ${saveErr.message}`);
+          }
+        }
+        addLog(`✅ Saved ${savedCount}/${allResults.length} record(s) to database`);
       }
 
       addLog('\n🎉 Evaluation Complete!');
