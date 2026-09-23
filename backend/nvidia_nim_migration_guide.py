@@ -11,7 +11,7 @@ via a simple OpenAI-compatible REST API. For OCR / document reading,
 we use the vision-language model:
 
     Model:    nvidia/llama-3.2-11b-vision-instruct   (free tier available)
-    Endpoint: https://integrate.api.nvidia.com/v1/chat/completions
+    Endpoint: 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
 
 It accepts base64-encoded images (PNG/JPEG) and returns text — much
 more accurate than OCR.space for handwritten answer sheets.
@@ -23,7 +23,7 @@ HOW TO GET YOUR NVIDIA NIM API KEY
 2. Click  "Sign In" → create a free account
 3. Go to  https://build.nvidia.com/nvidia/llama-3_2-11b-vision-instruct
 4. Click  "Get API Key"  button (top right)
-5. Copy the key — it looks like:  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
+5. Copy the key — it looks like:  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
 6. Paste it into NVIDIA_API_KEY below
 
 
@@ -77,7 +77,7 @@ NEW_CONFIG = """
 # ========================================
 # CONFIGURATION
 # ========================================
-NVIDIA_API_KEY = "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"   # ← Paste your NVIDIA NIM key here
+NVIDIA_API_KEY = "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"   # ← Paste your NVIDIA NIM key here
 SENDER_EMAIL   = "nitesh.t.mulam2004@gmail.com"
 APP_PASSWORD   = "gxdd zdyh gfym mlcq"
 OUTPUT_DIR     = "extracted_pdfs"
@@ -112,7 +112,7 @@ def __init__(self, nvidia_api_key):
     self.log_messages = []
     
     # NVIDIA NIM endpoint and model
-    self.nvidia_url   = "https://integrate.api.nvidia.com/v1/chat/completions"
+    self.nvidia_url   = "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"
     self.nvidia_model = "nvidia/llama-3.2-11b-vision-instruct"
     self.nvidia_headers = {
         "Authorization": f"Bearer {self.nvidia_api_key}",

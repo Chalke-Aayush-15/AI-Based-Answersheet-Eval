@@ -563,7 +563,7 @@ class MultiSubjectPDFProcessor:
     Falls back to PyPDF2 for digital (non-scanned) PDFs automatically.
     """
 
-    NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions"
+    NVIDIA_URL   = "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"
     NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
     OCR_PROMPT = (

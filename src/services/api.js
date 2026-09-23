@@ -317,6 +317,85 @@ export const paymentsAPI = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS  (enhanced, role-scoped)
+// GET /api/analytics/summary   — aggregate stats with filters
+// GET /api/analytics/trend     — time-series for line chart
+// GET /api/analytics/students  — paginated student list
+// GET /api/analytics/subjects  — distinct subject names (for dropdown)
+// ─────────────────────────────────────────────────────────────────────────────
+export const analyticsAPI = {
+  /**
+   * Summary stats — total, avg, highest, lowest, pass rate, grade dist, subjects.
+   * @param {{ subject, grade, date_from, date_to }} params
+   */
+  summary: ({ subject = '', grade = '', date_from = '', date_to = '' } = {}) => {
+    const p = new URLSearchParams();
+    if (subject)   p.set('subject',   subject);
+    if (grade)     p.set('grade',     grade);
+    if (date_from) p.set('date_from', date_from);
+    if (date_to)   p.set('date_to',   date_to);
+    return apiFetch(`/api/analytics/summary?${p}`);
+  },
+
+  /**
+   * Time-series trend data for line chart.
+   * @param {{ subject, grade, date_from, date_to, group_by }} params
+   */
+  trend: ({ subject = '', grade = '', date_from = '', date_to = '', group_by = 'day' } = {}) => {
+    const p = new URLSearchParams({ group_by });
+    if (subject)   p.set('subject',   subject);
+    if (grade)     p.set('grade',     grade);
+    if (date_from) p.set('date_from', date_from);
+    if (date_to)   p.set('date_to',   date_to);
+    return apiFetch(`/api/analytics/trend?${p}`);
+  },
+
+  /**
+   * Paginated student results.
+   * @param {{ subject, grade, date_from, date_to, sort_by, order, limit, skip }} params
+   */
+  students: ({
+    subject = '', grade = '', date_from = '', date_to = '',
+    sort_by = 'percentage', order = 'desc', limit = 10, skip = 0,
+  } = {}) => {
+    const p = new URLSearchParams({ sort_by, order, limit, skip });
+    if (subject)   p.set('subject',   subject);
+    if (grade)     p.set('grade',     grade);
+    if (date_from) p.set('date_from', date_from);
+    if (date_to)   p.set('date_to',   date_to);
+    return apiFetch(`/api/analytics/students?${p}`);
+  },
+
+  /** List of distinct subject names for the filter dropdown. */
+  subjects: () => apiFetch('/api/analytics/subjects'),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHATBOT  (NVIDIA NIM powered, requires auth)
+// POST /api/chatbot/chat
+// ─────────────────────────────────────────────────────────────────────────────
+export const chatbotAPI = {
+  /**
+   * Send a message to the EvalAI AI assistant.
+   * @param {string}   message         — user's message
+   * @param {Array}    history         — [{ role, content }] previous turns
+   * @param {object|null} analyticsContext — snapshot of analytics data if on analytics tab
+   * @param {string|null} currentTab   — which dashboard tab user is on
+   * Returns { reply: string, model_used: string }
+   */
+  chat: (message, history = [], analyticsContext = null, currentTab = null) =>
+    apiFetch('/api/chatbot/chat', {
+      method: 'POST',
+      body:   JSON.stringify({
+        message,
+        history,
+        analytics_context: analyticsContext,
+        current_tab:       currentTab,
+      }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HEALTH
 // ─────────────────────────────────────────────────────────────────────────────
 export const healthAPI = {

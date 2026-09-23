@@ -52,7 +52,7 @@ class MultiSubjectPDFProcessor:
     Handles PDF text extraction for multiple subjects.
     
     OCR Backend: NVIDIA NIM — llama-3.2-11b-vision-instruct
-    Endpoint:    https://integrate.api.nvidia.com/v1/chat/completions
+    Endpoint:    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
     
     Far superior to OCR.space for:
       ✅ Handwritten answer sheets
@@ -62,7 +62,7 @@ class MultiSubjectPDFProcessor:
     """
 
     # ── NVIDIA NIM Configuration ──────────────────────────────────
-    NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions"
+    NVIDIA_URL   = "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"
     NVIDIA_MODEL = "nvidia/llama-3.2-11b-vision-instruct"
 
     # OCR prompt — tuned for exam answer sheets
@@ -85,7 +85,7 @@ class MultiSubjectPDFProcessor:
         nvidia_api_key : str
             Your NVIDIA NIM API key.
             Get one free at: https://build.nvidia.com/
-            Format: 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
+            Format: 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
         """
         self.nvidia_api_key = nvidia_api_key
         self.log_messages   = []
@@ -463,9 +463,9 @@ if __name__ == "__main__":
     print("=" * 60)
 
     # ── Put your key here for testing ──
-    TEST_KEY = "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"
+    TEST_KEY = "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"
 
-    if TEST_KEY == "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":
+    if TEST_KEY == "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":
         print("❌ Please set TEST_KEY to your actual NVIDIA NIM API key.")
         sys.exit(1)
 
