@@ -350,7 +350,7 @@ class FairEvaluationEngine:
 # PDF PROCESSOR  (NVIDIA NIM OCR)
 # ===========================================================================
 class PDFProcessor:
-    NVIDIA_URL   = "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"
+    NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions"
     NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
     OCR_PROMPT = (
         "You are a precise OCR engine for handwritten university exam answer sheets. "

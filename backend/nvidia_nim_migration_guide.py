@@ -112,7 +112,7 @@ def __init__(self, nvidia_api_key):
     self.log_messages = []
     
     # NVIDIA NIM endpoint and model
-    self.nvidia_url   = "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"
+    self.nvidia_url   = "https://integrate.api.nvidia.com/v1/chat/completions"
     self.nvidia_model = "nvidia/llama-3.2-11b-vision-instruct"
     self.nvidia_headers = {
         "Authorization": f"Bearer {self.nvidia_api_key}",

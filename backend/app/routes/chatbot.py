@@ -27,7 +27,7 @@ from app.config import settings
 router = APIRouter()
 
 # ── NVIDIA NIM config ─────────────────────────────────────────────────────────
-NVIDIA_URL   = "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"
+NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions"
 # Use the text-only instruct model (no vision needed for chat)
 NVIDIA_MODEL = "meta/llama-3.3-70b-instruct"
 # Fallback to the same vision model already used by OCR if the above is unavailable

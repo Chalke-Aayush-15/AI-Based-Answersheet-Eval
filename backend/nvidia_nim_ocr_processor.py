@@ -52,7 +52,7 @@ class MultiSubjectPDFProcessor:
     Handles PDF text extraction for multiple subjects.
     
     OCR Backend: NVIDIA NIM — llama-3.2-11b-vision-instruct
-    Endpoint:    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
+    Endpoint:    https://integrate.api.nvidia.com/v1/chat/completions
     
     Far superior to OCR.space for:
       ✅ Handwritten answer sheets
