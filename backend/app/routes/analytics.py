@@ -43,8 +43,13 @@ def _build_match(teacher_id, subject: Optional[str], grade: Optional[str],
                 pass
         if date_to:
             try:
-                dt_filter["$lte"] = datetime.fromisoformat(date_to).replace(
+                # Push to the very end of the day so records timestamped
+                # any time on date_to (not just exactly midnight) are
+                # included — otherwise $lte only matches 00:00:00.
+                end_of_day = datetime.fromisoformat(date_to).replace(
+                    hour=23, minute=59, second=59, microsecond=999999,
                     tzinfo=timezone.utc)
+                dt_filter["$lte"] = end_of_day
             except ValueError:
                 pass
         if dt_filter:
@@ -238,10 +243,7 @@ async def analytics_students(
         "grade":           1,
         "evaluated_at":    1,
         # explicitly EXCLUDE sensitive / internal fields
-        "teacher_id":       0,
-        "question_results": 0,
-        "student_email":    0,
-        "metadata":         0,
+
     }
 
     cursor = (

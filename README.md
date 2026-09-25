@@ -73,6 +73,7 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 cd backend
 ./venv/Scripts/Activate
 uvicorn main:app --reload
+uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### frontend
 npm start
