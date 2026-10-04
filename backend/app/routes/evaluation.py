@@ -26,13 +26,18 @@ router = APIRouter(prefix="/evaluation", tags=["Evaluation"])
 # Helper
 # ---------------------------------------------------------------------------
 
-def _get_evaluator() -> MultiSubjectEvaluator:
+def _get_evaluator(exam_mode: str = "unit_test",
+                   roster_path: str = None,
+                   language: Optional[str] = None) -> MultiSubjectEvaluator:
     return MultiSubjectEvaluator(
         nvidia_api_key=settings.NVIDIA_API_KEY,
         sender_email=settings.SENDER_EMAIL,
         app_password=settings.APP_PASSWORD,
         output_dir=settings.OUTPUT_DIR,
         use_ocr=True,
+        exam_mode=exam_mode,
+        roster_path=roster_path,
+        language=language,
     )
 
 
@@ -78,22 +83,38 @@ async def evaluate_subject(
     master_pdf:   UploadFile = File(..., description="Master answer-key PDF"),
     student_pdfs: List[UploadFile] = File(..., description="One or more student answer PDFs"),
     send_email:   bool = Form(False, description="Send result emails after evaluation"),
+    exam_mode:    str = Form("unit_test", description="Exam mode: 'unit_test' or 'end_sem'"),
+    roster_file:  Optional[UploadFile] = File(None, description="Student roster Excel (required for end_sem mode)"),
+    language:     Optional[str] = Form(None, description="Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)"),
     current_user: User = Depends(get_current_user),
 ):
     """
+    Evaluate student answer sheets with FAIR scoring.
+
+    Exam Modes:
+    - 'unit_test' (default): Student details extracted from PDF
+    - 'end_sem': Student details looked up from roster via seat number
+
+    Steps:
     1. Saves uploaded PDFs temporarily.
     2. Extracts text (PyPDF2 → NVIDIA NIM OCR fallback).
     3. Parses Q&A with regex.
-    4. Runs FAIR scoring (semantic 60 % + keyword 25 % + structure 10 % + length 5 %).
+    4. Runs FAIR scoring (semantic 60% + keyword 25% + structure 10% + length 5%).
     5. Returns per-student results JSON and saves an Excel file.
     6. Optionally sends result emails in the background.
     """
     tmp_dir = tempfile.mkdtemp(prefix="eval_")
+    roster_path = None
+
     try:
+        # Save roster file if provided (for end_sem mode)
+        if roster_file and exam_mode == "end_sem":
+            roster_path = _save_upload(roster_file, tmp_dir)
+
         master_path = _save_upload(master_pdf, tmp_dir)
         student_paths = [_save_upload(f, tmp_dir) for f in student_pdfs]
 
-        evaluator = _get_evaluator()
+        evaluator = _get_evaluator(exam_mode=exam_mode, roster_path=roster_path, language=language)
         logs: list[str] = []
         results = evaluator.evaluate_subject(
             subject_name=subject_name,
@@ -109,6 +130,7 @@ async def evaluate_subject(
 
         response = {
             "subject": subject_name,
+            "exam_mode": exam_mode,
             "students_evaluated": len(results),
             "results_file": results_file,
             "results": clean_results,
@@ -179,6 +201,7 @@ async def evaluate_batch(
     master_2:       Optional[UploadFile]   = File(None),
     students_2:     Optional[List[UploadFile]] = File(None),
     send_email:     bool = Form(False),
+    language:       Optional[str] = Form(None, description="Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)"),
     current_user:   User = Depends(get_current_user),
 ):
     """
@@ -201,7 +224,7 @@ async def evaluate_batch(
 
     tmp_dir = tempfile.mkdtemp(prefix="batch_eval_")
     try:
-        evaluator = _get_evaluator()
+        evaluator = _get_evaluator(language=language)
         all_results: list = []
         subject_names: list[str] = []
         all_feedback: dict = {}
