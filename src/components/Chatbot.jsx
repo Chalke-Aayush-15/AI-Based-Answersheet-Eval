@@ -108,7 +108,6 @@ export default function Chatbot({ activeTab, analyticsData }) {
   const [input,    setInput]    = useState('');
   const [messages, setMessages] = useState([]);   // { role, content, id }
   const [typing,   setTyping]   = useState(false);
-  const [error,    setError]    = useState('');
 
   const messagesEndRef = useRef(null);
   const inputRef       = useRef(null);
@@ -145,7 +144,6 @@ export default function Chatbot({ activeTab, analyticsData }) {
     const userMsg = { id: nextId(), role: 'user', content: trimmed };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
-    setError('');
     setTyping(true);
 
     // Build history from current messages (exclude the welcome msg for brevity)
@@ -170,7 +168,6 @@ export default function Chatbot({ activeTab, analyticsData }) {
       const errText = err.message === 'SESSION_EXPIRED'
         ? 'Your session has expired. Please log in again.'
         : err.message || 'Something went wrong. Please try again.';
-      setError(errText);
       setMessages(prev => [...prev, {
         id:      nextId(),
         role:    'assistant',
@@ -191,7 +188,6 @@ export default function Chatbot({ activeTab, analyticsData }) {
 
   function handleClear() {
     setMessages([]);
-    setError('');
     // Re-trigger welcome message
     setTimeout(() => {
       setMessages([{

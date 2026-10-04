@@ -279,7 +279,7 @@ export default function EvaluationPanel() {
                 { key: 'useSemantic', label: 'Semantic NLP Analysis',           hint: 'sentence-transformers (all-MiniLM-L6-v2)' },
                 { key: 'sendEmails',  label: 'Send results via Email',          hint: 'Gmail SMTP / App Password' },
               ].map(opt => (
-                <label key={opt.key} className={styles.optionRow}>
+                <label key={opt.key} className={`${styles.optionRow} ${styles.optionRowToggle}`}>
                   <div className={styles.toggle}>
                     <input
                       type="checkbox"
@@ -297,7 +297,7 @@ export default function EvaluationPanel() {
                 </label>
               ))}
               {/* OCR Language (Optional) */}
-              <div className={styles.optionRow}>
+              <div className={`${styles.optionRow} ${styles.optionRowField}`}>
                 <div className={styles.optionText}>
                   <span className={styles.optionLabel}>OCR Language (Optional)</span>
                   <span className={styles.optionHint}>Enter language for NVIDIA Nemotron OCR v2 (e.g., hindi, marathi)</span>
@@ -311,13 +311,13 @@ export default function EvaluationPanel() {
                 />
               </div>
               {/* Exam Mode Selection */}
-              <div className={styles.optionRow}>
+              <div className={`${styles.optionRow} ${styles.optionRowMode}`}>
                 <div className={styles.optionText}>
                   <span className={styles.optionLabel}>Exam Mode</span>
                   <span className={styles.optionHint}>Select evaluation mode</span>
                 </div>
                 <div className={styles.toggleGroup}>
-                  <label className={styles.toggle}>
+                  <label className={styles.toggleModeOption}>
                     <input
                       type="radio"
                       name="examMode"
@@ -325,10 +325,10 @@ export default function EvaluationPanel() {
                       checked={examMode === 'unit_test'}
                       onChange={(e) => setExamMode(e.target.value)}
                     />
-                    <span className={styles.toggleSlider} />
+                    <span className={styles.toggleModeTrack} />
                     <span className={styles.toggleLabel}>Unit Test</span>
                   </label>
-                  <label className={styles.toggle}>
+                  <label className={styles.toggleModeOption}>
                     <input
                       type="radio"
                       name="examMode"
@@ -336,14 +336,14 @@ export default function EvaluationPanel() {
                       checked={examMode === 'end_sem'}
                       onChange={(e) => setExamMode(e.target.value)}
                     />
-                    <span className={styles.toggleSlider} />
+                    <span className={styles.toggleModeTrack} />
                     <span className={styles.toggleLabel}>End Sem</span>
                   </label>
                 </div>
               </div>
               {/* Conditional Roster Upload for End Sem */}
               {examMode === 'end_sem' && (
-                <div className={styles.optionRow}>
+                <div className={`${styles.optionRow} ${styles.optionRowField}`}>
                   <div className={styles.optionText}>
                     <span className={styles.optionLabel}>Roster File (Excel)</span>
                     <span className={styles.optionHint}>Required for End Sem mode</span>

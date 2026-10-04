@@ -1,15 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { HeroScene } from '../components/three/HeroScene';
+import { ScrollReveal } from '../components/motion/ScrollReveal';
+import { ThreeDButton } from '../components/ui/ThreeDButton';
+import { AnimatedStatCard } from '../components/ui/AnimatedStatCard';
 import styles from './HomePage.module.css';
 
 const NAV_LINKS = ['Features', 'How It Works', 'Subjects', 'Contact'];
-
-const STATS = [
-  { icon: '⚡', value: '10x', label: 'Faster Grading' },
-  { icon: '🧠', value: '95%', label: 'AI Accuracy' },
-  { icon: '✉️', value: '100%', label: 'Auto Email' },
-  { icon: '📚', value: '5+', label: 'Subjects' },
-];
 
 const FEATURES = [
   { icon: '🔍', title: 'OCR Text Extraction', desc: 'Automatically extract handwritten and scanned answer sheets using advanced OCR technology.' },
@@ -267,8 +264,10 @@ export default function HomePage() {
       {/* ── HERO ── */}
       <section className={styles.hero}>
         <div className={styles.heroBg}>
-          <div className={styles.heroBlobA} />
-          <div className={styles.heroBlobB} />
+          {/* Replace static blobs with 3D particle field */}
+          <div className={styles.hero3DContainer}>
+            <HeroScene />
+          </div>
           <div className={styles.gridPattern} />
         </div>
         <div className={styles.heroContainer}>
@@ -284,21 +283,58 @@ export default function HomePage() {
               Upload PDF answer sheets and get instant AI-powered evaluation. Leverage NLP semantic analysis,
               detailed analytics, and automated email reports to save hours of work.
             </p>
+
+            {/* Enhanced stats with animations */}
             <div className={styles.heroStats}>
-              {STATS.map(s => (
-                <div key={s.label} className={styles.heroStat}>
-                  <span className={styles.heroStatIcon}>{s.icon}</span>
-                  <span className={styles.heroStatVal}>{s.value}</span>
-                  <span className={styles.heroStatLabel}>{s.label}</span>
-                </div>
-              ))}
+              <ScrollReveal delay={0} type="fade-up" distance={30}>
+                <AnimatedStatCard
+                  icon="⚡"
+                  value="10x"
+                  label="Faster Grading"
+                  delay={0}
+                />
+              </ScrollReveal>
+              <ScrollReveal delay={0.1} type="fade-up" distance={30}>
+                <AnimatedStatCard
+                  icon="🧠"
+                  value="95%"
+                  label="AI Accuracy"
+                  delay={0.1}
+                />
+              </ScrollReveal>
+              <ScrollReveal delay={0.2} type="fade-up" distance={30}>
+                <AnimatedStatCard
+                  icon="✉️"
+                  value="100%"
+                  label="Auto Email"
+                  delay={0.2}
+                />
+              </ScrollReveal>
+              <ScrollReveal delay={0.3} type="fade-up" distance={30}>
+                <AnimatedStatCard
+                  icon="📚"
+                  value="5+"
+                  label="Subjects"
+                  delay={0.3}
+                />
+              </ScrollReveal>
             </div>
+
             <div className={styles.heroCtas}>
-              <button className={styles.ctaPrimary} onClick={() => navigate('/register')}>🚀 Start Grading Now</button>
-              <a href="#how-it-works" className={styles.ctaSecondary}>See How It Works ↓</a>
+              <ThreeDButton
+                variant="primary"
+                size="lg"
+                onClick={() => navigate('/register')}
+              >
+                🚀 Start Grading Now
+              </ThreeDButton>
+              <ScrollReveal delay={0.4} type="fade-up" distance={20}>
+                <a href="#how-it-works" className={styles.ctaSecondary}>See How It Works ↓</a>
+              </ScrollReveal>
             </div>
           </div>
 
+          {/* Keep the tilt card for now, but we could enhance it later */}
           <div className={styles.heroVisual} ref={heroCardRef} style={heroCardStyle}>
             <div className={styles.heroCard}>
               <div className={styles.heroCardHeader}>

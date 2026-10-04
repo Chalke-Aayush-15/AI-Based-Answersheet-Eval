@@ -1,0 +1,78 @@
+.threeD-button {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Variants */
+.threeD-button--primary {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+}
+
+.threeD-button--secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.threeD-button--outline {
+  background: transparent;
+  color: #3b82f6;
+  border: 2px solid #3b82f6;
+}
+
+/* Sizes */
+.threeD-button--sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.threeD-button--md {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+
+.threeD-button--lg {
+  padding: 1rem 2rem;
+  font-size: 1.125rem;
+}
+
+/* 3D Effect */
+.threeD-button:hover {
+  transform: perspective(1000px) rotateX(5deg) rotateY(5deg) scale(1.05);
+}
+
+.threeD-button:active {
+  transform: perspective(1000px) rotateX(0) rotateY(0) scale(0.98);
+}
+
+/* Gradient overlay */
+.threeD-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgba(255,255,255,0.1), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.threeD-button:hover::before {
+  opacity: 1;
+}
+
+/* Disabled state */
+.threeD-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}

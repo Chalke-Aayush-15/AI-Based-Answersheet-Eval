@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { SubscriptionProvider, useSubscription } from './subscription/SubscriptionContext';
+import { SmoothScrollProvider } from './components/motion/SmoothScrollProvider';
 import styles from './App.module.css';
 
 import HomePage     from './Pages/HomePage';
@@ -115,11 +116,13 @@ export default function App() {
       <AppProvider>
         {/* ONE SubscriptionProvider at the root so plan state is shared everywhere */}
         <SubscriptionProvider>
-          <div className={styles.app}>
-            <div className={styles.content}>
-              <AppRouter />
+          <SmoothScrollProvider>
+            <div className={styles.app}>
+              <div className={styles.content}>
+                <AppRouter />
+              </div>
             </div>
-          </div>
+          </SmoothScrollProvider>
         </SubscriptionProvider>
       </AppProvider>
     </BrowserRouter>

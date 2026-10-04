@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useSubscription } from '../subscription/SubscriptionContext';
 import { canAccess } from '../subscription/plans';
+import { ScrollReveal } from '../components/motion/ScrollReveal';
 
 import Sidebar from '../components/Sidebar';
 import SubjectManager from '../components/SubjectManager';
@@ -69,18 +70,24 @@ export default function Dashboard() {
     <div className={appStyles.app}>
       <Sidebar onOpenPricing={handleOpenPricing} />
       <main className={appStyles.content}>
-        {PANELS[activeTab]}
+        <ScrollReveal delay={0} type="fade-up" distance={20}>
+          {PANELS[activeTab]}
+        </ScrollReveal>
         {isLocked && (
-          <LockedOverlay tabId={activeTab} onUpgrade={handleOpenPricing} />
+          <ScrollReveal delay={0.2} type="fade-up" distance={20}>
+            <LockedOverlay tabId={activeTab} onUpgrade={handleOpenPricing} />
+          </ScrollReveal>
         )}
       </main>
 
       {/* Chatbot — only rendered when user is authenticated and has an active plan */}
       {isActive && (
-        <Chatbot
-          activeTab={activeTab}
-          analyticsData={analyticsData}
-        />
+        <ScrollReveal delay={0.4} type="fade-up" distance={20}>
+          <Chatbot
+            activeTab={activeTab}
+            analyticsData={analyticsData}
+          />
+        </ScrollReveal>
       )}
     </div>
   );

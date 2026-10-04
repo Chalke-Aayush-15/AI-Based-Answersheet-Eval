@@ -105,7 +105,7 @@ function PlanCard({ plan, isCurrentPlan, onSelect, loadingPlan, animDelay }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PricingPage() {
   const navigate = useNavigate();
-  const { state, dispatch, isActive, activatePlan } = useSubscription();
+  const { state, isActive, activatePlan } = useSubscription();
 
   const [loadingPlan, setLoadingPlan]   = useState(null);
   const [paymentError, setPaymentError] = useState('');
