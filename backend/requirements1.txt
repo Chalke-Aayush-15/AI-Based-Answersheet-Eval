@@ -5,6 +5,7 @@ python-multipart==0.0.9
 
 # ── Settings / env ────────────────────────────
 pydantic-settings==2.3.4
+email-validator
 
 # ── Database ──────────────────────────────────
 motor==3.5.0
