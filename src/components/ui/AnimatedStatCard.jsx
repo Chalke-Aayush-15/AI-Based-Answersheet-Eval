@@ -11,6 +11,8 @@ export const AnimatedStatCard = ({
   const elementRef = useRef(null);
 
   useEffect(() => {
+    const element = elementRef.current;
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -24,13 +26,13 @@ export const AnimatedStatCard = ({
       { threshold: 0.2, rootMargin: '-100px' }
     );
 
-    if (elementRef.current) {
-      observer.observe(elementRef.current);
+    if (element) {
+      observer.observe(element);
     }
 
     return () => {
-      if (elementRef.current) {
-        observer.unobserve(elementRef.current);
+      if (element) {
+        observer.unobserve(element);
       }
     };
   }, [delay]);
