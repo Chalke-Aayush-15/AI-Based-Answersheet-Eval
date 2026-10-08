@@ -52,6 +52,9 @@ export default function EvaluationPanel() {
   const [progress, setProgress] = useState(0);
   const [results,  setResults]  = useState([]);   // latest batch results
   const [error,    setError]    = useState('');
+  const [examMode, setExamMode] = useState('unit_test');
+  const [rosterFile, setRosterFile] = useState(null);
+  const [language, setLanguage] = useState('');   // Language for OCR
   const abortRef = useRef(false);
 
   // ── Utility: push a log line ───────────────────────────────────────────────
@@ -108,6 +111,9 @@ export default function EvaluationPanel() {
           s.masterPdf,
           s.studentPdfs,
           state.settings.sendEmails,
+          examMode,
+          examMode === 'end_sem' ? rosterFile : null,
+          language,
           (line) => addLog(`   ${line}`),
         );
 
@@ -130,6 +136,9 @@ export default function EvaluationPanel() {
         const batchData = await evaluationAPI.evaluateBatch(
           state.subjects,
           state.settings.sendEmails,
+          examMode,
+          examMode === 'end_sem' ? rosterFile : null,
+          language,
           (line) => addLog(`   ${line}`),
         );
 
@@ -270,7 +279,7 @@ export default function EvaluationPanel() {
                 { key: 'useSemantic', label: 'Semantic NLP Analysis',           hint: 'sentence-transformers (all-MiniLM-L6-v2)' },
                 { key: 'sendEmails',  label: 'Send results via Email',          hint: 'Gmail SMTP / App Password' },
               ].map(opt => (
-                <label key={opt.key} className={styles.optionRow}>
+                <label key={opt.key} className={`${styles.optionRow} ${styles.optionRowToggle}`}>
                   <div className={styles.toggle}>
                     <input
                       type="checkbox"
@@ -287,6 +296,72 @@ export default function EvaluationPanel() {
                   </div>
                 </label>
               ))}
+              {/* OCR Language (Optional) */}
+              <div className={`${styles.optionRow} ${styles.optionRowField}`}>
+                <div className={styles.optionText}>
+                  <span className={styles.optionLabel}>OCR Language (Optional)</span>
+                  <span className={styles.optionHint}>Enter language for NVIDIA Nemotron OCR v2 (e.g., hindi, marathi)</span>
+                </div>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="e.g., hindi, marathi, tamil"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                />
+              </div>
+              {/* Exam Mode Selection */}
+              <div className={`${styles.optionRow} ${styles.optionRowMode}`}>
+                <div className={styles.optionText}>
+                  <span className={styles.optionLabel}>Exam Mode</span>
+                  <span className={styles.optionHint}>Select evaluation mode</span>
+                </div>
+                <div className={styles.toggleGroup}>
+                  <label className={styles.toggleModeOption}>
+                    <input
+                      type="radio"
+                      name="examMode"
+                      value="unit_test"
+                      checked={examMode === 'unit_test'}
+                      onChange={(e) => setExamMode(e.target.value)}
+                    />
+                    <span className={styles.toggleModeTrack} />
+                    <span className={styles.toggleLabel}>Unit Test</span>
+                  </label>
+                  <label className={styles.toggleModeOption}>
+                    <input
+                      type="radio"
+                      name="examMode"
+                      value="end_sem"
+                      checked={examMode === 'end_sem'}
+                      onChange={(e) => setExamMode(e.target.value)}
+                    />
+                    <span className={styles.toggleModeTrack} />
+                    <span className={styles.toggleLabel}>End Sem</span>
+                  </label>
+                </div>
+              </div>
+              {/* Conditional Roster Upload for End Sem */}
+              {examMode === 'end_sem' && (
+                <div className={`${styles.optionRow} ${styles.optionRowField}`}>
+                  <div className={styles.optionText}>
+                    <span className={styles.optionLabel}>Roster File (Excel)</span>
+                    <span className={styles.optionHint}>Required for End Sem mode</span>
+                  </div>
+                  <input
+                    className={styles.input}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        setRosterFile(e.target.files[0]);
+                      } else {
+                        setRosterFile(null);
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -403,9 +478,8 @@ export default function EvaluationPanel() {
                   </small>
                 </div>
               : state.evaluationLogs.map((entry, i) => (
-                  <LogEntry key={i} entry={entry} />
-                ))
-            }
+                <LogEntry key={i} entry={entry} />
+              ))}
           </div>
         </div>
       </div>

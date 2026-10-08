@@ -16,7 +16,7 @@ export default function Sidebar({ onOpenPricing }) {
   const navigate = useNavigate();
   const { state, dispatch, logout } = useApp();
 
-  const { state: subState, isActive, daysLeft } = useSubscription();
+  const { state: subState, daysLeft } = useSubscription();
   const plan = subState.planId ? PLANS[subState.planId] : null;
   const user = state.authUser;
 
@@ -87,11 +87,25 @@ export default function Sidebar({ onOpenPricing }) {
         {NAV_ITEMS.map((item) => {
           const locked = plan ? !canAccess(plan.id, item.id) : true;
           const active = state.activeTab === item.id;
+
+          // Move useState outside of map - we'll handle hover differently
           return (
             <button
               key={item.id}
               className={`${styles.navItem} ${active ? styles.active : ''} ${locked ? styles.locked : ''}`}
               onClick={() => handleTabClick(item.id)}
+              onMouseEnter={(e) => {
+                // We'll handle hover with CSS instead of state to avoid hook issues
+                e.currentTarget.style.transform = 'perspective(1000px) rotateX(5deg) rotateY(5deg) scale(1.05)';
+                const icon = e.currentTarget.querySelector('.navIcon');
+                if (icon !== null) { icon.style.transform = 'rotateZ(10deg)'; }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'none';
+                const icon = e.currentTarget.querySelector('.navIcon');
+                if (icon !== null) { icon.style.transform = 'none'; }
+              }}
+              style={{ transition: 'transform 0.3s ease' }}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navLabel}>{item.label}</span>

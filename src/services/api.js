@@ -143,14 +143,24 @@ export const evaluationAPI = {
    * @param {File}      masterPdf       — actual File object
    * @param {File[]}    studentPdfs     — array of File objects
    * @param {boolean}   sendEmail
+   * @param {string}    examMode        — 'unit_test' or 'end_sem'
+   * @param {File|null} rosterFile      — roster Excel file (required for end_sem mode)
+   * @param {string|null} language      — Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)
    * @param {function}  onLog           — optional(string) => void, called per log line
    */
-  evaluateSubject: async (subjectName, masterPdf, studentPdfs, sendEmail = false, onLog = null) => {
+  evaluateSubject: async (subjectName, masterPdf, studentPdfs, sendEmail = false, examMode = 'unit_test', rosterFile = null, language = null, onLog = null) => {
     const fd = new FormData();
     fd.append('subject_name', subjectName);
     fd.append('master_pdf',   masterPdf);
     studentPdfs.forEach(f => fd.append('student_pdfs', f));
     fd.append('send_email', String(sendEmail));
+    fd.append('exam_mode', examMode);
+    if (rosterFile) {
+      fd.append('roster_file', rosterFile);
+    }
+    if (language) {
+      fd.append('language', language);
+    }
 
     const data = await apiFetchForm('/evaluation/evaluate-subject', fd);
     if (onLog && Array.isArray(data?.logs)) data.logs.forEach(l => onLog(l));
@@ -161,8 +171,11 @@ export const evaluationAPI = {
   /**
    * Batch evaluate up to 3 subjects in one request.
    * @param {{ name, masterPdf: File, studentPdfs: File[] }[]} subjects
+   * @param {string} examMode        — 'unit_test' or 'end_sem'
+   * @param {File|null} rosterFile   — roster Excel file (required for end_sem mode)
+   * @param {string|null} language   — Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)
    */
-  evaluateBatch: async (subjects, sendEmail = false, onLog = null) => {
+  evaluateBatch: async (subjects, sendEmail = false, examMode = 'unit_test', rosterFile = null, language = null, onLog = null) => {
     const fd = new FormData();
     subjects.slice(0, 3).forEach((s, i) => {
       fd.append(`subject_name_${i}`, s.name);
@@ -170,6 +183,13 @@ export const evaluationAPI = {
       s.studentPdfs.forEach(f => fd.append(`students_${i}`, f));
     });
     fd.append('send_email', String(sendEmail));
+    fd.append('exam_mode', examMode);
+    if (rosterFile) {
+      fd.append('roster_file', rosterFile);
+    }
+    if (language) {
+      fd.append('language', language);
+    }
 
     const data = await apiFetchForm('/evaluation/evaluate-batch', fd);
     if (onLog && Array.isArray(data?.logs)) data.logs.forEach(l => onLog(l));
@@ -314,6 +334,85 @@ export const paymentsAPI = {
 
   /** Current subscription status (source of truth from DB), e.g. { planId, planName, activatedAt } */
   status: () => apiFetch('/api/payments/status'),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS  (enhanced, role-scoped)
+// GET /api/analytics/summary   — aggregate stats with filters
+// GET /api/analytics/trend     — time-series for line chart
+// GET /api/analytics/students  — paginated student list
+// GET /api/analytics/subjects  — distinct subject names (for dropdown)
+// ─────────────────────────────────────────────────────────────────────────────
+export const analyticsAPI = {
+  /**
+   * Summary stats — total, avg, highest, lowest, pass rate, grade dist, subjects.
+   * @param {{ subject, grade, date_from, date_to }} params
+   */
+  summary: ({ subject = '', grade = '', date_from = '', date_to = '' } = {}) => {
+    const p = new URLSearchParams();
+    if (subject)   p.set('subject',   subject);
+    if (grade)     p.set('grade',     grade);
+    if (date_from) p.set('date_from', date_from);
+    if (date_to)   p.set('date_to',   date_to);
+    return apiFetch(`/api/analytics/summary?${p}`);
+  },
+
+  /**
+   * Time-series trend data for line chart.
+   * @param {{ subject, grade, date_from, date_to, group_by }} params
+   */
+  trend: ({ subject = '', grade = '', date_from = '', date_to = '', group_by = 'day' } = {}) => {
+    const p = new URLSearchParams({ group_by });
+    if (subject)   p.set('subject',   subject);
+    if (grade)     p.set('grade',     grade);
+    if (date_from) p.set('date_from', date_from);
+    if (date_to)   p.set('date_to',   date_to);
+    return apiFetch(`/api/analytics/trend?${p}`);
+  },
+
+  /**
+   * Paginated student results.
+   * @param {{ subject, grade, date_from, date_to, sort_by, order, limit, skip }} params
+   */
+  students: ({
+    subject = '', grade = '', date_from = '', date_to = '',
+    sort_by = 'percentage', order = 'desc', limit = 10, skip = 0,
+  } = {}) => {
+    const p = new URLSearchParams({ sort_by, order, limit, skip });
+    if (subject)   p.set('subject',   subject);
+    if (grade)     p.set('grade',     grade);
+    if (date_from) p.set('date_from', date_from);
+    if (date_to)   p.set('date_to',   date_to);
+    return apiFetch(`/api/analytics/students?${p}`);
+  },
+
+  /** List of distinct subject names for the filter dropdown. */
+  subjects: () => apiFetch('/api/analytics/subjects'),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHATBOT  (NVIDIA NIM powered, requires auth)
+// POST /api/chatbot/chat
+// ─────────────────────────────────────────────────────────────────────────────
+export const chatbotAPI = {
+  /**
+   * Send a message to the EvalAI AI assistant.
+   * @param {string}   message         — user's message
+   * @param {Array}    history         — [{ role, content }] previous turns
+   * @param {object|null} analyticsContext — snapshot of analytics data if on analytics tab
+   * @param {string|null} currentTab   — which dashboard tab user is on
+   * Returns { reply: string, model_used: string }
+   */
+  chat: (message, history = [], analyticsContext = null, currentTab = null) =>
+    apiFetch('/api/chatbot/chat', {
+      method: 'POST',
+      body:   JSON.stringify({
+        message,
+        history,
+        analytics_context: analyticsContext,
+        current_tab:       currentTab,
+      }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

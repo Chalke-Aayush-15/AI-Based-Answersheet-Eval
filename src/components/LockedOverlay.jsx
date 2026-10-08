@@ -7,11 +7,6 @@ export default function LockedOverlay({ tabId, onUpgrade }) {
   const meta = TAB_META[tabId];
   const currentPlan = state.planId ? PLANS[state.planId] : null;
 
-  // Which plan unlocks this tab?
-  const unlockingPlan = Object.values(PLANS).find(
-    p => p.allowedTabs.includes(tabId) && p.id !== 'free_trial'
-  );
-
   return (
     <div className={styles.overlay}>
       <div className={styles.card}>

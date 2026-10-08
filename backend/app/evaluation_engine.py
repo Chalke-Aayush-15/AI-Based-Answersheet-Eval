@@ -13,6 +13,8 @@ import json
 import tempfile
 import smtplib
 import ssl
+import asyncio
+import concurrent.futures
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -20,6 +22,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
 from collections import defaultdict
+from typing import Optional
 
 import requests
 import numpy as np
@@ -48,6 +51,13 @@ except ImportError:
 
 # ── Poppler (Windows only) ────────────────────────────────────────────────────
 POPPLER_PATH = r"C:\poppler\poppler-25.12.0\Library\bin"   # Set via env var on Windows
+
+# ── OCR Optimization Settings ──────────────────────────────────────────────────
+OCR_MAX_WORKERS = 4          # Max concurrent OCR requests
+OCR_DPI = 150                # Reduced DPI for faster processing (was 200)
+OCR_TIMEOUT = 90             # Request timeout in seconds
+OCR_RETRY_DELAY = 3          # Delay between retries
+OCR_RATE_LIMIT_DELAY = 1     # Small delay between concurrent requests to avoid 429
 
 
 # ===========================================================================
@@ -365,8 +375,13 @@ class PDFProcessor:
         "7. Output ONLY the raw transcribed text. No commentary, no markdown."
     )
 
-    def __init__(self, nvidia_api_key: str):
+    def __init__(self, nvidia_api_key: str, language: Optional[str] = None):
         self.nvidia_api_key = nvidia_api_key
+        # Set model based on language selection
+        if language and language.strip():
+            self.NVIDIA_MODEL = "NVIDIA Nemotron OCR v2"
+        else:
+            self.NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
         self._headers = {
             "Authorization": f"Bearer {nvidia_api_key}",
             "Content-Type": "application/json",
@@ -406,19 +421,10 @@ class PDFProcessor:
             return None
 
         total = len(images)
-        log(f"📄 {total} page(s). Sending to NVIDIA NIM…")
+        log(f"📄 {total} page(s). Using parallel OCR ({OCR_MAX_WORKERS} workers)…")
 
-        parts = []
-        for n, img in enumerate(images, 1):
-            log(f"🧠 OCR page {n}/{total}…")
-            text = self._ocr_page(img, n, log)
-            if text:
-                parts.append(f"--- Page {n} ---\n{text}")
-                log(f"  ✅ Page {n}: {len(text)} chars")
-            else:
-                log(f"  ⚠️ Page {n}: no text extracted")
-            if n < total:
-                time.sleep(2)
+        # Parallel OCR processing
+        parts = self._ocr_pages_parallel(images, log)
 
         if not parts:
             return None
@@ -429,10 +435,39 @@ class PDFProcessor:
         log(f"✅ OCR complete — {len(combined)} chars from {total} page(s).")
         return combined.strip()
 
+    def _ocr_pages_parallel(self, images: list, log_fn) -> list:
+        """Process multiple pages in parallel using ThreadPoolExecutor."""
+        results = [None] * len(images)  # Preserve order
+
+        def process_page(idx_img):
+            idx, img = idx_img
+            try:
+                # Small stagger to avoid rate limiting
+                time.sleep(idx * OCR_RATE_LIMIT_DELAY)
+                text = self._ocr_page(img, idx + 1, log_fn)
+                return (idx, text)
+            except Exception as e:
+                log_fn(f"❌ Page {idx + 1} error: {e}")
+                return (idx, "")
+
+        # Use ThreadPoolExecutor for parallel processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=OCR_MAX_WORKERS) as executor:
+            futures = list(executor.map(process_page, enumerate(images)))
+
+        # Collect results in order
+        for idx, text in futures:
+            if text:
+                results[idx] = f"--- Page {idx + 1} ---\n{text}"
+                log_fn(f"  ✅ Page {idx + 1}: {len(text)} chars")
+            else:
+                log_fn(f"  ⚠️ Page {idx + 1}: no text extracted")
+
+        return [r for r in results if r]
+
     def _pdf_to_images(self, pdf_path: str, log_fn):
         poppler = POPPLER_PATH if POPPLER_PATH and os.path.isdir(POPPLER_PATH) else None
         try:
-            kwargs = {"dpi": 200, "fmt": "jpeg", "thread_count": 2}
+            kwargs = {"dpi": OCR_DPI, "fmt": "jpeg", "thread_count": 4}
             if poppler:
                 kwargs["poppler_path"] = poppler
             return convert_from_path(pdf_path, **kwargs)
@@ -445,10 +480,12 @@ class PDFProcessor:
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
         w, h = img.size
-        if w * h > 1_500_000:
-            r = (1_500_000 / (w * h)) ** 0.5
+        # Resize if too large (reduced threshold for faster upload)
+        max_pixels = 1_200_000  # Reduced from 1.5M
+        if w * h > max_pixels:
+            r = (max_pixels / (w * h)) ** 0.5
             img = img.resize((int(w * r), int(h * r)), Image.LANCZOS)
-        img.save(buf, format="JPEG", quality=90)
+        img.save(buf, format="JPEG", quality=85)  # Reduced quality for smaller size
         buf.seek(0)
         return base64.b64encode(buf.read()).decode()
 
@@ -465,29 +502,34 @@ class PDFProcessor:
             "top_p": 1.0,
             "stream": False,
         }
-        for attempt in range(1, 3):
+
+        for attempt in range(1, 4):  # Increased retries to 3
             try:
                 resp = requests.post(self.NVIDIA_URL, headers=self._headers,
-                                     json=payload, timeout=90)
+                                     json=payload, timeout=OCR_TIMEOUT)
                 if resp.status_code == 200:
                     choices = resp.json().get("choices", [])
                     return choices[0].get("message", {}).get("content", "").strip() if choices else ""
                 if resp.status_code == 429:
-                    wait = 20 * attempt
-                    log_fn(f"⏳ Rate limited — waiting {wait}s…")
+                    # Exponential backoff for rate limiting
+                    wait = OCR_RETRY_DELAY * (2 ** attempt)
+                    log_fn(f"⏳ Page {page_num} rate limited — waiting {wait}s…")
                     time.sleep(wait)
                     continue
                 if resp.status_code == 401:
                     log_fn("❌ Invalid NVIDIA API key.")
                     return ""
-                if attempt == 1:
-                    time.sleep(5)
+                # Other errors - retry
+                if attempt < 3:
+                    time.sleep(OCR_RETRY_DELAY)
             except requests.exceptions.Timeout:
-                if attempt == 1:
-                    time.sleep(5)
+                log_fn(f"⏱️ Page {page_num} timeout (attempt {attempt})")
+                if attempt < 3:
+                    time.sleep(OCR_RETRY_DELAY)
             except Exception as e:
-                log_fn(f"❌ {e}")
-                return ""
+                log_fn(f"❌ Page {page_num} error: {e}")
+                if attempt < 3:
+                    time.sleep(OCR_RETRY_DELAY)
         return ""
 
 
@@ -573,6 +615,75 @@ class EmailSender:
         except Exception as e:
             return False, f"Email connection failed: {e}"
 
+    # ── Enhanced Email Helpers ────────────────────────────────────────────────
+
+    @staticmethod
+    def format_detailed_feedback(question_data: dict) -> str:
+        """Format detailed question feedback for email HTML."""
+        html = ""
+        for q_key, data in question_data.items():
+            if isinstance(data, dict):
+                score = data.get('score', 0)
+                max_marks = data.get('max_marks', 10)
+                feedback = data.get('feedback', 'No feedback')
+            else:
+                score = data
+                max_marks = 10
+                feedback = "Answer evaluated"
+            color = '#27ae60' if score >= (max_marks * 0.7) else '#f39c12' if score >= (max_marks * 0.4) else '#e74c3c'
+            html += f"""
+            <tr>
+                <td style="padding:6px;border-bottom:1px solid #ddd;"><strong>{q_key}</strong></td>
+                <td style="padding:6px;border-bottom:1px solid #ddd;color:{color};">{score:.1f}/{max_marks}</td>
+                <td style="padding:6px;border-bottom:1px solid #ddd;">{feedback}</td>
+            </tr>"""
+        return html
+
+    @staticmethod
+    def get_performance_feedback(percentage: float) -> str:
+        """Generate personalized performance feedback based on percentage."""
+        if percentage >= 90:
+            return "🌟 Outstanding performance! You have demonstrated exceptional understanding across all subjects. Your consistent excellence is remarkable. Keep up the great work!"
+        elif percentage >= 80:
+            return "🎯 Excellent overall performance! You have strong command over most subjects. With focused effort on a few areas, you can achieve perfection."
+        elif percentage >= 70:
+            return "👍 Very good performance! You have solid understanding of core concepts. Continue building on this foundation to reach the next level."
+        elif percentage >= 60:
+            return "📚 Good overall effort. You have satisfactory knowledge in most subjects. Identify your weaker areas and dedicate more time to them."
+        elif percentage >= 50:
+            return "⚠️ Average performance. You have basic understanding but need more practice. Focus on understanding fundamental concepts before moving to advanced topics."
+        elif percentage >= 40:
+            return "📉 Below average performance. You need to significantly improve in multiple subjects. Consider revisiting the basics and practicing more regularly."
+        else:
+            return "❌ Needs significant improvement. Please seek help from teachers, use additional learning resources, and practice regularly. Don't get discouraged - consistent effort will lead to improvement."
+
+    @staticmethod
+    def generate_improvement_tips(subject_results: dict) -> str:
+        """Generate subject-specific improvement tips."""
+        tips = ""
+        weak_subjects = []
+        strong_subjects = []
+
+        for subject, scores in subject_results.items():
+            percentage = scores.get('Percentage', 0)
+            if percentage < 60:
+                weak_subjects.append((subject, percentage))
+            elif percentage >= 80:
+                strong_subjects.append(subject)
+
+        if weak_subjects:
+            tips += f"<li><strong>Focus Areas:</strong> {', '.join([f'{s} ({p:.1f}%)' for s, p in weak_subjects])} - These subjects need more attention.</li>"
+        if strong_subjects:
+            tips += f"<li><strong>Strengths:</strong> {', '.join(strong_subjects)} - You're doing excellent here. Keep it up!</li>"
+
+        tips += """
+        <li><strong>Practice regularly:</strong> Solve previous years' question papers and take mock tests.</li>
+        <li><strong>Review feedback:</strong> Carefully read the question-wise feedback in the attached Excel file.</li>
+        <li><strong>Use technical terms:</strong> Incorporate more subject-specific terminology in your answers.</li>
+        <li><strong>Structure answers:</strong> Use clear headings, bullet points, and examples in your responses.</li>
+        """
+        return tips
+
     def send_results_email(self, student_data: dict, subject_results: dict,
                            detailed_results: dict = None,
                            results_file: str = None) -> tuple:
@@ -587,10 +698,12 @@ class EmailSender:
             msg = MIMEMultipart()
             msg["From"]    = self.sender_email
             msg["To"]      = email
-            msg["Subject"] = f"📊 Exam Results — {name}"
+            msg["Subject"] = f"📊 Comprehensive Exam Results - {name}"
 
             subject_rows = ""
+            detailed_breakdown = ""
             overall_marks = overall_max = 0
+
             for subj, scores in subject_results.items():
                 tm = scores.get("Total Marks", 0)
                 mp = scores.get("Max Possible", 0)
@@ -607,34 +720,85 @@ class EmailSender:
                   <td style="padding:8px;border-bottom:1px solid #ddd;color:{colour};font-weight:bold;">{grade}</td>
                 </tr>"""
 
+                # Add detailed question-wise feedback if available
+                if detailed_results and subj in detailed_results:
+                    detailed_breakdown += f"""
+                    <div style="margin-top:15px;padding:10px;background-color:#f8f9fa;border-left:4px solid #3498db;">
+                        <h5 style="color:#2c3e50;margin-top:0;">📋 {subj} - Question-wise Analysis</h5>
+                        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                            <tr style="background-color:#e9ecef;">
+                                <th style="padding:6px;text-align:left;">Question</th>
+                                <th style="padding:6px;text-align:left;">Score/Max</th>
+                                <th style="padding:6px;text-align:left;">Feedback</th>
+                            </tr>
+                            {self.format_detailed_feedback(detailed_results[subj])}
+                        </table>
+                    </div>
+                    """
+
             overall_pct = round(overall_marks / overall_max * 100, 2) if overall_max else 0
             overall_grade = FairEvaluationEngine.calculate_grade(overall_pct)
 
             html = f"""
-            <html><body style="font-family:Arial,sans-serif;max-width:700px;margin:auto;">
-              <div style="background:#2c3e50;color:white;padding:20px;border-radius:8px 8px 0 0;">
-                <h2>📊 Exam Evaluation Results</h2>
-                <p>Student: <b>{name}</b> | Roll No: <b>{roll}</b></p>
+            <html><body style="font-family:Arial,sans-serif;max-width:800px;margin:auto;">
+              <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:30px;border-radius:15px 15px 0 0;color:white;">
+                <h1 style="margin:0;font-size:28px;">🎓 Multi-Subject Exam Results</h1>
+                <p style="margin:10px 0 0;opacity:0.9;">Complete Performance Analysis Report</p>
               </div>
-              <div style="padding:20px;background:#f8f9fa;">
-                <table style="width:100%;border-collapse:collapse;">
-                  <tr style="background:#ecf0f1;">
-                    <th style="padding:8px;text-align:left;">Subject</th>
-                    <th style="padding:8px;text-align:left;">Marks</th>
-                    <th style="padding:8px;text-align:left;">Percentage</th>
-                    <th style="padding:8px;text-align:left;">Grade</th>
-                  </tr>
-                  {subject_rows}
-                  <tr style="background:#2c3e50;color:white;font-weight:bold;">
-                    <td style="padding:8px;">OVERALL</td>
-                    <td style="padding:8px;">{overall_marks:.2f}/{overall_max}</td>
-                    <td style="padding:8px;">{overall_pct:.2f}%</td>
-                    <td style="padding:8px;">{overall_grade}</td>
-                  </tr>
-                </table>
-              </div>
-              <div style="padding:15px;background:#ecf0f1;border-radius:0 0 8px 8px;font-size:12px;color:#7f8c8d;">
-                This is an automated result email generated by the FAIR Evaluation System.
+              <div style="background-color:#ffffff;padding:30px;border-radius:0 0 15px 15px;box-shadow:0 10px 30px rgba(0,0,0,0.1);">
+                <p style="font-size:18px;color:#2c3e50;">Dear <strong>{name}</strong>,</p>
+                <p>Your comprehensive exam evaluation across all subjects is complete. Here is your detailed performance analysis:</p>
+
+                <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:25px;border-radius:10px;margin:20px 0;color:white;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                      <h3 style="margin:0;color:white;">📊 Overall Performance</h3>
+                      <p style="margin:10px 0 0;font-size:14px;opacity:0.9;">Roll Number: {roll}</p>
+                    </div>
+                    <div style="text-align:right;">
+                      <div style="font-size:48px;font-weight:bold;">{overall_pct:.1f}%</div>
+                      <div style="font-size:24px;background:rgba(255,255,255,0.2);padding:5px 15px;border-radius:20px;display:inline-block;margin-top:5px;">{overall_grade}</div>
+                      <div style="font-size:16px;margin-top:5px;">{overall_marks:.1f}/{overall_max} marks</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="background-color:#f8f9fa;padding:20px;border-radius:10px;margin:20px 0;">
+                  <h3 style="color:#2c3e50;margin-top:0;">📚 Subject-wise Results</h3>
+                  <table style="width:100%;border-collapse:collapse;">
+                    <tr style="background-color:#e9ecef;">
+                      <th style="padding:12px;text-align:left;border-radius:5px 0 0 5px;">Subject</th>
+                      <th style="padding:12px;text-align:left;">Marks Obtained</th>
+                      <th style="padding:12px;text-align:left;">Percentage</th>
+                      <th style="padding:12px;text-align:left;border-radius:0 5px 5px 0;">Grade</th>
+                    </tr>
+                    {subject_rows}
+                  </table>
+                </div>
+
+                {detailed_breakdown}
+
+                <div style="background-color:#e8f4fc;padding:20px;border-radius:10px;margin:20px 0;">
+                  <h4 style="color:#2980b9;margin-top:0;">📈 Performance Feedback</h4>
+                  <p style="font-size:16px;line-height:1.6;">{self.get_performance_feedback(overall_pct)}</p>
+                </div>
+
+                <div style="background-color:#fff3cd;padding:15px;border-radius:8px;margin:20px 0;border-left:4px solid #ffc107;">
+                  <h4 style="color:#856404;margin-top:0;">💡 Improvement Tips</h4>
+                  <ul style="color:#856404;margin:0;padding-left:20px;">
+                    {self.generate_improvement_tips(subject_results)}
+                  </ul>
+                </div>
+
+                <div style="margin-top:30px;padding-top:20px;border-top:1px solid #eee;">
+                  <p><strong>Note:</strong> For detailed question-wise scores and complete feedback, please check the attached Excel file.</p>
+                  <p style="color:#7f8c8d;font-style:italic;">This is an automated message from the Multi-Subject Exam Evaluation System. Please do not reply to this email.</p>
+                </div>
+
+                <div style="margin-top:30px;text-align:center;color:#7f8c8d;font-size:12px;">
+                  <p>Generated on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}</p>
+                  <p>© Multi-Subject Fair Evaluation System v2.0</p>
+                </div>
               </div>
             </body></html>"""
 
@@ -646,7 +810,7 @@ class EmailSender:
                     part.set_payload(f.read())
                 encoders.encode_base64(part)
                 part.add_header("Content-Disposition",
-                                f"attachment; filename={os.path.basename(results_file)}")
+                                f"attachment; filename=Complete_Results_{name.replace(' ', '_')}.xlsx")
                 msg.attach(part)
 
             ctx = ssl.create_default_context()
@@ -670,17 +834,102 @@ class MultiSubjectEvaluator:
     """
     Orchestrates PDF extraction, answer parsing, FAIR evaluation,
     result saving, and email dispatch.  No GUI involved.
+
+    Supports two exam modes:
+    - 'unit_test': Student details extracted from PDF (default)
+    - 'end_sem': Student details looked up from roster via seat number
     """
 
     def __init__(self, nvidia_api_key: str, sender_email: str,
                  app_password: str, output_dir: str = "extracted_pdfs",
-                 use_ocr: bool = True):
+                 use_ocr: bool = True, exam_mode: str = "unit_test",
+                 roster_path: str = None, language: Optional[str] = None):
         self.output_dir = output_dir
         self.use_ocr = use_ocr
+        self.exam_mode = exam_mode
+        self.roster_df = None
         self.fair_engine = FairEvaluationEngine()
-        self.pdf_processor = PDFProcessor(nvidia_api_key)
+        self.pdf_processor = PDFProcessor(nvidia_api_key, language)
         self.email_sender = EmailSender(sender_email, app_password)
         os.makedirs(output_dir, exist_ok=True)
+
+        # Load roster if in end_sem mode
+        if exam_mode == "end_sem" and roster_path:
+            self.load_roster(roster_path)
+
+    # ── End-Sem Mode: Roster Support ─────────────────────────────────────────
+
+    def load_roster(self, roster_path: str) -> bool:
+        """
+        Load student roster from Excel for End-Sem mode.
+        Expected columns: Seat no, Name, Gmail id (flexible matching)
+        """
+        try:
+            df = pd.read_excel(roster_path)
+            # Normalize column names
+            norm = {c: re.sub(r'\s+', ' ', str(c)).strip().lower() for c in df.columns}
+            df = df.rename(columns=norm)
+            # Column aliases
+            aliases = {
+                'seat no': 'seat_no', 'seat number': 'seat_no', 'seatno': 'seat_no',
+                'seat': 'seat_no', 'roll no': 'roll_no', 'roll number': 'roll_no',
+                'roll': 'roll_no', 'name': 'name', 'student name': 'name',
+                'gmail id': 'email', 'gmail': 'email', 'email': 'email',
+                'email id': 'email', 'e-mail': 'email',
+            }
+            df = df.rename(columns={k: v for k, v in aliases.items() if k in df.columns})
+            if 'seat_no' not in df.columns:
+                raise ValueError("Roster must contain a 'Seat no' column")
+            df['seat_no'] = df['seat_no'].astype(str).str.strip()
+            self.roster_df = df
+            return True
+        except Exception as e:
+            print(f"Failed to load roster: {e}")
+            return False
+
+    def extract_seat_number(self, text: str) -> str:
+        """Extract seat number from End-Sem answer sheet text."""
+        if not text:
+            return ''
+        patterns = [
+            r'Seat\s*(?:No|no|Number|number|#)?\s*[:\-]?\s*([0-9]{3,10})',
+            r'Seat\s*no[^0-9]{0,10}([0-9]{3,10})',
+            r'Roll\s*(?:No|Number)?\s*[:\-]?\s*([0-9]{3,10})',
+            r'\bS\.?\s*N\.?\s*[:\-]?\s*([0-9]{3,10})',
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+        return ''
+
+    def lookup_student_by_seat(self, seat_no: str) -> dict | None:
+        """Look up student in roster by seat number."""
+        if self.roster_df is None or not seat_no:
+            return None
+        seat_no = str(seat_no).strip()
+        match = self.roster_df[self.roster_df['seat_no'] == seat_no]
+        if match.empty:
+            # Try numeric fallback (strip leading zeros)
+            try:
+                match = self.roster_df[self.roster_df['seat_no'].str.lstrip('0') == seat_no.lstrip('0')]
+            except Exception:
+                pass
+        if match.empty:
+            return None
+        row = match.iloc[0]
+        return {
+            'name': str(row.get('name', '')).strip() or f'Seat_{seat_no}',
+            'roll_no': str(row.get('roll_no', seat_no)).strip(),
+            'seat_no': seat_no,
+            'email': str(row.get('email', '')).strip().lower(),
+        }
+
+    def _extract_seat_from_filename(self, pdf_path: str) -> str:
+        """Extract seat number from PDF filename."""
+        base = os.path.basename(pdf_path)
+        m = re.search(r'(?:seat[_\s-]*(?:no|number)?[_\s-]*)?([0-9]{4,10})', base, re.IGNORECASE)
+        return m.group(1) if m else ''
 
     # ── Text extraction ──────────────────────────────────────────────────────
 
@@ -728,8 +977,31 @@ class MultiSubjectEvaluator:
                 log(f"  ✗ Failed to extract text from {fname}")
                 continue
 
-            sinfo = AnswerParser.extract_student_info(student_text)
             sanswers = AnswerParser.parse_answers(student_text)
+
+            # Get student info based on exam mode
+            if self.exam_mode == "end_sem" and self.roster_df is not None:
+                # End-Sem: Look up student by seat number from roster
+                seat_no = self.extract_seat_number(student_text)
+                if not seat_no:
+                    seat_no = self._extract_seat_from_filename(pdf_path)
+                roster_info = self.lookup_student_by_seat(seat_no) if seat_no else None
+                if roster_info:
+                    sinfo = {
+                        "name": roster_info["name"],
+                        "roll_no": roster_info["roll_no"],
+                        "email": roster_info["email"],
+                        "seat_no": seat_no,
+                    }
+                    log(f"  📍 End-Sem mode: Seat {seat_no} → {sinfo['name']}")
+                else:
+                    # Fallback to PDF extraction
+                    sinfo = AnswerParser.extract_student_info(student_text)
+                    sinfo["seat_no"] = seat_no or "unknown"
+                    log(f"  ⚠️ Seat {seat_no} not in roster, using PDF info")
+            else:
+                # Unit-Test mode: Extract from PDF
+                sinfo = AnswerParser.extract_student_info(student_text)
 
             total_score = 0.0
             q_scores = {}
@@ -755,6 +1027,7 @@ class MultiSubjectEvaluator:
                 "Name":                name,
                 "Roll No":             sinfo["roll_no"],
                 "Email":               sinfo["email"],
+                "Seat No":             sinfo.get("seat_no", ""),
                 "Total Marks":         round(total_score, 2),
                 "Max Possible":        total_possible,
                 "Percentage":          pct,

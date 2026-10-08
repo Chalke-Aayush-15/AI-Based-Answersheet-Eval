@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_SECRET: str = "Xfnuzq63VzhCibfFXFfycWhV"
 
     # ── NVIDIA OCR ──────────────────────────────────────────
-    NVIDIA_API_KEY: str = "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"
+    NVIDIA_API_KEY: str = "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"
 
     # ── Email ───────────────────────────────────────────────
     SENDER_EMAIL: str = "nitesh.t.mulam2004@gmail.com"

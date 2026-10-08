@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes import auth, evaluations, payments
 from app.routes.evaluation import router as evaluation_router
 from app.routes.ocr import router as ocr_router
+from app.routes.analytics import router as analytics_router
+from app.routes.chatbot import router as chatbot_router
 
 # ── DB ─────────────────────────────────────────────────────────────────────
 from app.database import connect_db, disconnect_db
@@ -42,6 +44,12 @@ app.include_router(ocr_router)
 
 # Payments (old)
 app.include_router(payments.router, prefix="/api/payments", tags=["Payments"])
+
+# Analytics (enhanced, role-scoped)
+app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
+
+# Chatbot (NVIDIA NIM powered)
+app.include_router(chatbot_router, prefix="/api/chatbot", tags=["Chatbot"])
 
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────

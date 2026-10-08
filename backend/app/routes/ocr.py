@@ -23,6 +23,7 @@ router = APIRouter(prefix="/ocr", tags=["OCR"])
 async def extract_text(
     pdf_file:   UploadFile = File(..., description="PDF to process (scanned or digital)"),
     force_ocr:  bool       = Form(False, description="Force OCR even if PyPDF2 extracts text"),
+    language:   Optional[str] = Form(None, description="Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)"),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -38,7 +39,7 @@ async def extract_text(
         with open(pdf_path, "wb") as f:
             shutil.copyfileobj(pdf_file.file, f)
 
-        processor = PDFProcessor(nvidia_api_key=settings.NVIDIA_API_KEY)
+        processor = PDFProcessor(nvidia_api_key=settings.NVIDIA_API_KEY, language=language)
         logs: list[str] = []
 
         text = ""
@@ -75,11 +76,12 @@ async def extract_text(
 async def extract_text_batch(
     pdf_files:  list[UploadFile] = File(...),
     force_ocr:  bool             = Form(False),
+    language:   Optional[str] = Form(None, description="Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)"),
     current_user: User           = Depends(get_current_user),
 ):
     """Batch OCR — returns a list of extraction results, one per PDF."""
     tmp_dir = tempfile.mkdtemp(prefix="ocr_batch_")
-    processor = PDFProcessor(nvidia_api_key=settings.NVIDIA_API_KEY)
+    processor = PDFProcessor(nvidia_api_key=settings.NVIDIA_API_KEY, language=language)
     results = []
 
     try:

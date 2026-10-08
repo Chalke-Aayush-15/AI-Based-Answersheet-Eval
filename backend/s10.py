@@ -57,7 +57,7 @@ except ImportError:
 # ========================================
 # CONFIGURATION
 # ========================================
-NVIDIA_API_KEY = "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"
+NVIDIA_API_KEY = "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"
 SENDER_EMAIL = "nitesh.t.mulam2004@gmail.com"
 APP_PASSWORD = "gxdd zdyh gfym mlcq"
 OUTPUT_DIR = "extracted_pdfs"
@@ -563,7 +563,7 @@ class MultiSubjectPDFProcessor:
     Falls back to PyPDF2 for digital (non-scanned) PDFs automatically.
     """
 
-    NVIDIA_URL   = "https://integrate.api.nvidia.com/v1/chat/completions"
+    NVIDIA_URL   = "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"
     NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
     OCR_PROMPT = (
