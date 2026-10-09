@@ -17,6 +17,7 @@ passlib[bcrypt]==1.7.4
 
 # ── Payments ──────────────────────────────────
 razorpay==1.4.1
+setuptools==80.10.2
 
 # ── PDF processing ────────────────────────────
 PyPDF2==3.0.1
