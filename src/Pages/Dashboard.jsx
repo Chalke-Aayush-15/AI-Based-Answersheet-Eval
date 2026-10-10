@@ -13,6 +13,7 @@ import Analytics from '../components/Analytics';
 import Settings from '../components/Settings';
 import LockedOverlay from '../components/LockedOverlay';
 import Chatbot from '../components/Chatbot';
+import WelcomeBanner from '../components/WelcomeBanner';
 
 import appStyles from '../App.module.css';
 
@@ -52,6 +53,7 @@ export default function Dashboard() {
   const activeTab = state.activeTab || 'subjects';
   const planId    = subState.planId;
   const isLocked  = !isActive || (planId && !canAccess(planId, activeTab));
+  const userName  = state.authUser?.displayName?.split(' ')[0] || 'Educator';
 
   function handleOpenPricing() {
     navigate('/pricing');
@@ -80,14 +82,17 @@ export default function Dashboard() {
         )}
       </main>
 
+      {/* Welcome Banner for logged in users */}
+      {isActive && (
+        <WelcomeBanner userName={userName} planName={subState.planName} />
+      )}
+
       {/* Chatbot — only rendered when user is authenticated and has an active plan */}
       {isActive && (
-        <ScrollReveal delay={0.4} type="fade-up" distance={20}>
-          <Chatbot
-            activeTab={activeTab}
-            analyticsData={analyticsData}
-          />
-        </ScrollReveal>
+        <Chatbot
+          activeTab={activeTab}
+          analyticsData={analyticsData}
+        />
       )}
     </div>
   );

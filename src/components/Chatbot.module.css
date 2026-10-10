@@ -313,7 +313,40 @@
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .panel  { width: calc(100vw - 24px); right: 12px; bottom: 80px; max-height: 500px; }
+  .fab    { right: 16px; bottom: 20px; width: 50px; height: 50px; }
+  .fabIcon  { font-size: 20px; }
+  .fabClose { font-size: 16px; }
+}
+
 @media (max-width: 480px) {
-  .panel  { width: calc(100vw - 24px); right: 12px; bottom: 80px; }
-  .fab    { right: 16px; bottom: 20px; }
+  .panel  { width: calc(100vw - 24px); right: 12px; bottom: 70px; max-height: 450px; }
+  .fab    { right: 12px; bottom: 16px; width: 48px; height: 48px; }
+  .fabIcon  { font-size: 18px; }
+  .fabClose { font-size: 14px; }
+
+  /* Adjust header text sizes on very small screens */
+  .headerTitle { font-size: 13px; }
+  .headerSub   { font-size: 10px; }
+  .contextBadge { font-size: 10px; padding: 6px 12px; }
+
+  /* Adjust message bubbles */
+  .bubble { padding: 8px 12px; font-size: 12px; }
+  .input { padding: 8px 10px; font-size: 12px; }
+  .sendBtn { width: 32px; height: 32px; font-size: 14px; }
+  .suggestionChip { padding: 4px 8px; font-size: 10px; }
+}
+
+/* Additional safety for very small viewports */
+@media (max-height: 500px) {
+  .panel  { bottom: 60px; max-height: 400px; }
+  .fab    { bottom: 16px; }
+}
+
+@media (max-height: 400px) {
+  .panel  { bottom: 40px; max-height: 300px; }
+  .fab    { bottom: 12px; width: 40px; height: 40px; }
+  .fabIcon  { font-size: 16px; }
+  .fabClose { font-size: 12px; }
 }
