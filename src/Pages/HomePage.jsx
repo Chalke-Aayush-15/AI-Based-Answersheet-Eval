@@ -18,10 +18,10 @@ const FEATURES = [
 ];
 
 const HOW_IT_WORKS = [
-  { step: '01', title: 'Upload Subjects', desc: 'Add master answer sheets and student PDF submissions.' },
-  { step: '02', title: 'Configure Engine', desc: 'Select OCR, NLP models and email automation settings.' },
-  { step: '03', title: 'Run Evaluation', desc: 'The FAIR engine scores all students across all subjects automatically.' },
-  { step: '04', title: 'Review & Send', desc: 'View analytics, download CSVs and email results instantly.' },
+  { step: '01', title: 'Upload Answer Sheets', desc: 'Upload master answer sheet and student PDF submissions for evaluation.' },
+  { step: '02', title: 'Select Exam Mode', desc: 'Choose between regular exam or batch processing mode for multiple students.' },
+  { step: '03', title: 'AI Evaluation', desc: 'Our FAIR engine analyzes answers using OCR, NLP, and semantic matching.' },
+  { step: '04', title: 'Get Results', desc: 'View detailed scores, analytics, and download or email reports to students.' },
 ];
 
 const SUBJECTS = [

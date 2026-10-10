@@ -704,13 +704,13 @@
   font-family: 'Outfit', sans-serif;
   font-size: 52px;
   font-weight: 900;
-  color: rgba(22,163,74,0.1);
+  color: var(--primary);
   line-height: 1;
   margin-bottom: 20px;
   transition: var(--transition);
 }
 
-.stepCard:hover .stepNum { color: rgba(22,163,74,0.2); transform: scale(1.1); }
+.stepCard:hover .stepNum { color: var(--secondary); transform: scale(1.1); }
 
 .stepConnector {
   position: absolute;
