@@ -26,6 +26,8 @@
   color: var(--text);
   font-family: 'Outfit', sans-serif;
   min-height: 100vh;
+  margin: 0;
+  box-sizing: border-box;
   overflow-x: hidden;
   scroll-behavior: smooth;
 }
@@ -174,12 +176,12 @@
 
 /* ── HERO ────────────────────────────── */
 .hero {
-  min-height: 100vh;
+  min-height: calc(100vh - 80px);
   display: flex;
   align-items: center;
   position: relative;
   overflow: hidden;
-  padding: 120px 24px 80px;
+  padding: 0 24px 80px;
 }
 
 .heroBg {
@@ -1186,6 +1188,209 @@ a.contactInfoValue:hover { color: var(--primary); }
   background: #111827;
   padding: 48px 24px;
   border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ── EXAM MODE ────────────────────────── */
+.examMode {
+  padding: 100px 24px;
+  background: #FAFAFA;
+  position: relative;
+}
+
+.examMode::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(22,163,74,0.2), transparent);
+}
+
+.examModeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.examModeCard {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 20px;
+  padding: 32px 24px;
+  transition: var(--transition);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  animation: slideUp 0.6s ease both;
+}
+
+.examModeCard:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 15px 35px rgba(22,163,74,0.1);
+  border-color: transparent;
+}
+
+.examModeCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.examModeCard:hover::before { opacity: 1; }
+
+.examModeIcon {
+  width: 60px;
+  height: 60px;
+  background: #F0FDF4;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 24px;
+  color: var(--primary);
+  transition: var(--transition);
+}
+
+.examModeCard:hover .examModeIcon {
+  background: var(--primary);
+  color: white;
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.examModeTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.examModeDesc {
+  font-size: 15px;
+  color: var(--gray-500);
+  line-height: 1.7;
+}
+
+/* ── RESPONSIVE MEDIA QUERIES ────────── */
+@media (max-width: 1024px) {
+  .examModeGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .heroContainer { grid-template-columns: 1fr; text-align: center; gap: 60px; }
+  .heroContent { display: flex; flex-direction: column; align-items: center; }
+  .heroStats { margin: 0 auto 40px; }
+  .heroDesc { margin-left: auto; margin-right: auto; }
+  .stepsRow { grid-template-columns: repeat(2, 1fr); }
+
+  /* Adjust connectors for 2 cols */
+  .stepConnector { display: none; }
+
+  .heroVisual { max-width: 500px; margin: 0 auto; }
+
+  .contactLayout { grid-template-columns: 1fr; }
+  .contactInfoCard { position: static; margin-bottom: 24px; }
+
+  .featuresGrid { grid-template-columns: repeat(2, 1fr); }
+  .subjectsGrid { justify-content: center; }
+}
+
+@media (max-width: 768px) {
+  .navCtas { display: none; } /* Hide desktop buttons */
+
+  .hamburger { display: flex; }
+
+  .navLinks {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 80%;
+    max-width: 300px;
+    background: white;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 32px;
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+    padding: 40px;
+  }
+
+  .navLinksOpen { transform: translateX(0); }
+
+  .navMobileCtas {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    margin-top: 20px;
+  }
+
+  .navMobileCtas button { width: 100%; padding: 12px; font-size: 16px; }
+
+  .heroTitle { font-size: 36px; }
+  .heroStats { flex-wrap: wrap; justify-content: center; width: 100%; }
+
+  .featuresGrid { grid-template-columns: 1fr; }
+  .subjectsGrid { gap: 12px; }
+  .examModeGrid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .examModeCard { max-width: 100%; margin: 0 auto; }
+
+  .stepsRow { grid-template-columns: 1fr; gap: 40px; }
+
+  .stepCard { max-width: 350px; margin: 0 auto; }
+
+  .stepConnector { display: none; }
+
+  .footerInner { flex-direction: column; gap: 24px; text-align: center; }
+
+  .contactFormRow { grid-template-columns: 1fr; }
+  .contactForm { padding: 24px; }
+}
+
+@media (max-width: 480px) {
+  .hero { padding: 80px 16px 60px; }
+  .heroTitle { font-size: 28px; }
+  .heroDesc { font-size: 16px; }
+  .heroStats { gap: 20px; }
+
+  .section { padding: 80px 16px; }
+  .sectionTitle { font-size: 28px; }
+  .sectionSub { font-size: 16px; }
+
+  .featureCard { padding: 24px; }
+  .featureIconWrapper { width: 48px; height: 48px; font-size: 22px; }
+  .featureTitle { font-size: 18px; }
+  .featureDesc { font-size: 14px; }
+
+  .stepNum { font-size: 40px; }
+  .stepTitle { font-size: 16px; }
+  .stepDesc { font-size: 13px; }
+
+  .subjectPill { padding: 12px 20px; font-size: 14px; gap: 8px; }
+  .subjectPillIcon { font-size: 18px; }
+
+  .examModeCard { padding: 24px; }
+  .examModeIcon { width: 50px; height: 50px; font-size: 20px; margin-bottom: 20px; }
+  .examModeTitle { font-size: 18px; }
+  .examModeDesc { font-size: 14px; }
+
+  .contactInfoItem { gap: 10px; }
+  .contactInfoIconBox { width: 32px; height: 32px; font-size: 16px; }
+  .contactInfoLabel { font-size: 10px; }
+  .contactInfoValue { font-size: 13px; }
+
+  .ctaBanner { padding: 80px 16px; }
+  .ctaBannerTitle { font-size: 24px; }
+  .ctaBannerSub { font-size: 16px; }
+  .ctaBannerBtn { padding: 14px 28px; font-size: 15px; }
 }
 
 .footerInner {
