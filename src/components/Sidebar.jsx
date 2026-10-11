@@ -5,6 +5,7 @@ import { PLANS, canAccess } from '../subscription/plans';
 import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
+  { id: 'home',       icon: '⌂',  label: 'Home' },
   { id: 'subjects',   icon: '📚', label: 'Subjects' },
   { id: 'evaluation', icon: '🎯', label: 'Evaluation' },
   { id: 'pdf',        icon: '📄', label: 'PDF Tools' },

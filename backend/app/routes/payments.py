@@ -19,14 +19,14 @@ rz_client = razorpay.Client(
 
 # Plan config (must match frontend plans.js)
 PLAN_CONFIG = {
-    "silver": {"name": "Silver", "amount": 29900,  "display": "₹299"},   # in paise
-    "gold":   {"name": "Gold",   "amount": 69900,  "display": "₹699"},
+    "starter":      {"name": "Starter",      "amount": 14900, "display": "₹149"},  # in paise
+    "professional": {"name": "Professional", "amount": 39900, "display": "₹399"},
 }
 
 
 # ── Request / Response schemas ────────────────────────────────────────────────
 class CreateOrderRequest(BaseModel):
-    plan_id: str   # "silver" or "gold"
+    plan_id: str   # "starter" or "professional"
 
 class VerifyPaymentRequest(BaseModel):
     razorpay_order_id: str

@@ -14,7 +14,7 @@ const initialState = {
   authChecked: !getToken(),         // skip backend check when no token exists
 
   // ── Navigation ───────────────────────────────────────────────────────────────
-  activeTab: 'subjects',
+  activeTab: 'home',
 
   // ── Subjects  (each entry holds actual File objects for upload) ───────────────
   // Shape: { name, masterPdf: File, studentPdfs: File[],

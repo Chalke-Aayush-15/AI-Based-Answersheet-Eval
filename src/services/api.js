@@ -244,11 +244,13 @@ export const ocrAPI = {
    * @param {File}     pdfFile
    * @param {boolean}  forceOcr   — skip PyPDF2 fast-path, always use NVIDIA NIM
    * @param {function} onLog      — optional log callback
+   * @param {string}   language   — OCR language code (e.g. 'hi', 'mr', 'ta')
    */
-  extractText: async (pdfFile, forceOcr = false, onLog = null) => {
+  extractText: async (pdfFile, forceOcr = false, onLog = null, language = '') => {
     const fd = new FormData();
     fd.append('pdf_file',  pdfFile);
     fd.append('force_ocr', String(forceOcr));
+    if (language) fd.append('language', language);
 
     const data = await apiFetchForm('/ocr/extract-text', fd);
     if (onLog && Array.isArray(data?.logs)) data.logs.forEach(l => onLog(l));
@@ -257,10 +259,11 @@ export const ocrAPI = {
   },
 
   /** Batch OCR — multiple PDFs at once */
-  extractBatch: async (pdfFiles, forceOcr = false) => {
+  extractBatch: async (pdfFiles, forceOcr = false, language = '') => {
     const fd = new FormData();
     pdfFiles.forEach(f => fd.append('pdf_files', f));
     fd.append('force_ocr', String(forceOcr));
+    if (language) fd.append('language', language);
     return apiFetchForm('/ocr/extract-text-batch', fd);
     // Returns: { results: [{ filename, method_used, char_count, text, success }], total }
   },

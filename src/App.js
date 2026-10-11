@@ -43,14 +43,6 @@ function GuestOnly({ children }) {
   return children;
 }
 
-// ── Pricing guard: already has active plan → skip pricing, go to /dashboard ──
-function RequirePlan({ children }) {
-  const { isActive, state } = useSubscription();
-  if (state.planLoading) return <FullPageSpinner />;
-  if (isActive) return <Navigate to="/dashboard" replace />;
-  return children;
-}
-
 // ── Dashboard guard: no active plan → go choose one at /pricing ──────────────
 function RequireActivePlan({ children }) {
   const { isActive, state } = useSubscription();
@@ -70,14 +62,12 @@ function AppRouter() {
       <Route path="/login"    element={<GuestOnly><LoginPage    onLogin={login}       onNavigate={() => {}} /></GuestOnly>} />
       <Route path="/register" element={<GuestOnly><RegisterPage onRegister={register} onNavigate={() => {}} /></GuestOnly>} />
 
-      {/* Pricing: must be logged in; if plan already active → skip to dashboard */}
+      {/* Pricing and subscription management: must be logged in */}
       <Route
         path="/pricing"
         element={
           <RequireAuth>
-            <RequirePlan>
-              <PricingPage />
-            </RequirePlan>
+            <PricingPage />
           </RequireAuth>
         }
       />

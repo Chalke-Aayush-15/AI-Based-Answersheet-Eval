@@ -6,38 +6,40 @@ import { ThreeDButton } from '../components/ui/ThreeDButton';
 import { AnimatedStatCard } from '../components/ui/AnimatedStatCard';
 import styles from './HomePage.module.css';
 
-const NAV_LINKS = ['Features', 'How It Works', 'Subjects', 'Contact'];
+const NAV_LINKS = ['Features', 'How It Works', 'Subjects', 'Exam Mode', 'Contact'];
 
 const FEATURES = [
-  { icon: '🔍', title: 'OCR Text Extraction', desc: 'Automatically extract handwritten and scanned answer sheets using advanced OCR technology.' },
-  { icon: '🧠', title: 'NLP Semantic Analysis', desc: 'Goes beyond keywords — understands the context and meaning behind student answers.' },
-  { icon: '⚖️', title: 'FAIR Scoring Engine', desc: 'Multi-dimensional scoring: Semantic, Keywords, Structure, and Length for fair evaluation.' },
-  { icon: '📊', title: 'Detailed Analytics', desc: 'Visualize performance with radar charts, grade distributions, and per-subject breakdowns.' },
-  { icon: '✉️', title: 'Auto Email Reports', desc: 'Send individual PDF score reports to students via Gmail instantly after evaluation.' },
-  { icon: '📚', title: 'Multi-Subject Support', desc: 'Evaluate SE, Cyber Security, AI, Blockchain, Law and more in a single batch run.' },
+  { icon: '🎯', title: 'Precision Grading', desc: 'AI-powered evaluation that matches human accuracy while eliminating bias and fatigue.' },
+  { icon: '⚡', title: 'Blazing Fast Results', desc: 'Grade hundreds of answer sheets in minutes, not hours—get instant feedback for timely interventions.' },
+  { icon: '📊', title: 'Deep Learning Analytics', desc: 'Rich insights with skill gap analysis, learning trend detection, and comparative performance dashboards.' },
+  { icon: '📧', title: 'Automated Feedback Loop', desc: 'Personalized feedback reports automatically generated and delivered to each student via email/LMS.' },
+  { icon: '🛡️', title: 'Academic Integrity Guard', desc: 'Built-in plagiarism detection and answer similarity analysis to uphold assessment fairness.' },
+  { icon: '📱', title: 'Mobile-Friendly Workflow', desc: 'Evaluate on-the-go—upload sheets from any device and access results from your smartphone or tablet.' },
 ];
 
 const HOW_IT_WORKS = [
-  { step: '01', title: 'Upload Answer Sheets', desc: 'Upload master answer sheet and student PDF submissions for evaluation.' },
-  { step: '02', title: 'Select Exam Mode', desc: 'Choose between regular exam or batch processing mode for multiple students.' },
-  { step: '03', title: 'AI Evaluation', desc: 'Our FAIR engine analyzes answers using OCR, NLP, and semantic matching.' },
-  { step: '04', title: 'Get Results', desc: 'View detailed scores, analytics, and download or email reports to students.' },
+  { step: '01', title: 'Upload & Configure', desc: 'Drag & drop answer sheets, select exam mode, and define evaluation criteria in seconds.' },
+  { step: '02', title: 'AI Processing', desc: 'Our engine extracts text, analyzes content semantics, and applies your grading rubric automatically.' },
+  { step: '03', title: 'Review Results', desc: 'View detailed scores, analytics reports, and flagged items requiring instructor attention.' },
+  { step: '04', title: 'Distribute Feedback', desc: 'Send personalized feedback to students with one click or integrate directly with your LMS.' },
 ];
 
 const SUBJECTS = [
-  { name: 'Software Engineering', icon: '💻' },
-  { name: 'Cyber Security', icon: '🔐' },
-  { name: 'Artificial Intelligence', icon: '🤖' },
-  { name: 'Blockchain', icon: '⛓️' },
-  { name: 'Constitutional Law', icon: '⚖️' },
-  { name: 'Data Structures', icon: '🌳' },
+  { name: 'Computer Science', icon: '💻' },
+  { name: 'Engineering', icon: '⚙️' },
+  { name: 'Business & Management', icon: '📊' },
+  { name: 'Life Sciences', icon: '🔬' },
+  { name: 'Social Sciences', icon: '👥' },
+  { name: 'Languages & Humanities', icon: '📚' },
+  { name: 'Mathematics', icon: '∑' },
+  { name: 'Health Sciences', icon: '🏥' },
 ];
 
 const CONTACT_INFO = [
-  { icon: '✉️', label: 'Email', value: 'support@evalai.edu', href: 'mailto:support@evalai.edu' },
-  { icon: '📞', label: 'Phone', value: '+91 98765 43210', href: 'tel:+919876543210' },
-  { icon: '📍', label: 'Location', value: 'Pune, Maharashtra, India', href: null },
-  { icon: '🕐', label: 'Support Hours', value: 'Mon–Fri, 9AM – 6PM IST', href: null },
+  { icon: '✉️', label: 'Email', value: 'hello@evalai.tech', href: 'mailto:hello@evalai.tech' },
+  { icon: '🌐', label: 'Website', value: 'evalai.tech', href: 'https://evalai.tech' },
+  { icon: '📍', label: 'Headquarters', value: 'Pune, Maharashtra, India', href: null },
+  { icon: '🕐', label: 'Support Hours', value: '24/7 Technical Support', href: null },
 ];
 
 // 3D Tilt hook
@@ -96,7 +98,7 @@ function ContactSection() {
           <div className={styles.successState}>
             <div className={styles.successIcon}>🎉</div>
             <h3 className={styles.successTitle}>Message Sent Successfully!</h3>
-            <p className={styles.successDesc}>Thank you for reaching out. We'll get back to you within 24 hours.</p>
+            <p className={styles.successDesc}>Thank you for reaching out. Our team will respond within 2 business hours.</p>
             <button className={styles.successResetBtn} onClick={() => setStatus('idle')}>
               ✉️ Send Another Message
             </button>
@@ -112,14 +114,14 @@ function ContactSection() {
         <div className={styles.sectionHead}>
           <span className={styles.sectionTag}>Contact</span>
           <h2 className={styles.sectionTitle}>Get in Touch</h2>
-          <p className={styles.sectionSub}>Have questions about EvalAI? We'd love to hear from you.</p>
+          <p className={styles.sectionSub}>Questions about EvalAI? We're here to help educators transform their grading workflow.</p>
         </div>
         <div className={styles.contactLayout}>
           <div className={styles.contactInfoCard}>
-            <h3 className={styles.contactInfoTitle}>Let's talk 👋</h3>
+            <h3 className={styles.contactInfoTitle}>Let's connect 👋</h3>
             <p className={styles.contactInfoDesc}>
-              Whether you're an educator, institution, or researcher — we're here
-              to help you set up AI-powered grading for your students.
+              Whether you're an educator, administrator, or institution leader — we're here
+              to help you implement AI-powered grading that saves time and improves learning outcomes.
             </p>
             <div className={styles.contactInfoList}>
               {CONTACT_INFO.map(item => (
@@ -135,9 +137,9 @@ function ContactSection() {
               ))}
             </div>
             <div className={styles.socialLinks}>
-              <a href="https://github.com" target="_blank" rel="noreferrer" className={styles.socialLink}>⬛ GitHub</a>
-              <a href="https://linkedin.com" target="_blank" rel="noreferrer" className={styles.socialLink}>🔵 LinkedIn</a>
-              <a href="https://twitter.com" target="_blank" rel="noreferrer" className={styles.socialLink}>🐦 Twitter</a>
+              <a href="https://github.com/evalai-tech" target="_blank" rel="noreferrer" className={styles.socialLink}>⬛ GitHub</a>
+              <a href="https://linkedin.com/company/evalai-tech" target="_blank" rel="noreferrer" className={styles.socialLink}>🔵 LinkedIn</a>
+              <a href="https://twitter.com/evalai_tech" target="_blank" rel="noreferrer" className={styles.socialLink}>🐦 Twitter</a>
             </div>
           </div>
 
@@ -172,6 +174,7 @@ function ContactSection() {
                   <option value="demo">Request a Demo</option>
                   <option value="pricing">Pricing Inquiry</option>
                   <option value="support">Technical Support</option>
+                  <option value="integration">LMS Integration</option>
                   <option value="partnership">Partnership</option>
                   <option value="other">Other</option>
                 </select>
@@ -274,47 +277,47 @@ export default function HomePage() {
           <div className={styles.heroContent}>
             <div className={styles.heroBadge}>
               <span className={styles.heroBadgeDot} />
-              AI-Powered · FAIR Evaluation Engine
+              Trusted by Educators Worldwide
             </div>
             <h1 className={styles.heroTitle}>
-              Automated <span className={styles.heroAccent}>Answer Sheet</span><br />Grading System
+              Stop Manual Grading. Start Impacting Learning.
             </h1>
             <p className={styles.heroDesc}>
-              Upload PDF answer sheets and get instant AI-powered evaluation. Leverage NLP semantic analysis,
-              detailed analytics, and automated email reports to save hours of work.
+              EvalAI transforms hours of grading into minutes of insight. Upload any answer sheet and get immediate,
+              fair, and detailed feedback that helps students improve—while you reclaim your time for what matters most.
             </p>
 
             {/* Enhanced stats with animations */}
             <div className={styles.heroStats}>
               <ScrollReveal delay={0} type="fade-up" distance={30}>
                 <AnimatedStatCard
-                  icon="⚡"
-                  value="10x"
-                  label="Faster Grading"
+                  icon="⏱️"
+                  value="80%"
+                  label="Time Saved"
                   delay={0}
                 />
               </ScrollReveal>
               <ScrollReveal delay={0.1} type="fade-up" distance={30}>
                 <AnimatedStatCard
-                  icon="🧠"
+                  icon="🎯"
                   value="95%"
-                  label="AI Accuracy"
+                  label="Grading Accuracy"
                   delay={0.1}
                 />
               </ScrollReveal>
               <ScrollReveal delay={0.2} type="fade-up" distance={30}>
                 <AnimatedStatCard
-                  icon="✉️"
-                  value="100%"
-                  label="Auto Email"
+                  icon="📈"
+                  value="2x"
+                  label="Learning Improvement"
                   delay={0.2}
                 />
               </ScrollReveal>
               <ScrollReveal delay={0.3} type="fade-up" distance={30}>
                 <AnimatedStatCard
-                  icon="📚"
-                  value="5+"
-                  label="Subjects"
+                  icon="🌍"
+                  value="500+"
+                  label="Institutions Trusted"
                   delay={0.3}
                 />
               </ScrollReveal>
@@ -375,9 +378,9 @@ export default function HomePage() {
       <section className={styles.section} id="features">
         <div className={styles.sectionInner}>
           <div className={styles.sectionHead}>
-            <span className={styles.sectionTag}>Features</span>
-            <h2 className={styles.sectionTitle}>Everything you need to grade smarter</h2>
-            <p className={styles.sectionSub}>Powered by cutting-edge NLP and OCR — built for educators</p>
+            <span className={styles.sectionTag}>Why Educators Choose EvalAI</span>
+            <h2 className={styles.sectionTitle}>Grade Smarter, Not Harder</h2>
+            <p className={styles.sectionSub}>AI-powered tools designed to reduce workload while improving learning outcomes</p>
           </div>
           <div className={styles.featuresGrid}>
             {FEATURES.map((f, i) => (
@@ -416,9 +419,9 @@ export default function HomePage() {
       <section className={styles.section} id="subjects">
         <div className={styles.sectionInner}>
           <div className={styles.sectionHead}>
-            <span className={styles.sectionTag}>Subjects</span>
-            <h2 className={styles.sectionTitle}>Multi-Subject Evaluation</h2>
-            <p className={styles.sectionSub}>Pre-trained on subject-specific technical vocabularies</p>
+            <span className={styles.sectionTag}>Subject Coverage</span>
+            <h2 className={styles.sectionTitle}>Broad Academic Domain Support</h2>
+            <p className={styles.sectionSub}>Specialized AI models trained for accurate evaluation across disciplines</p>
           </div>
           <div className={styles.subjectsGrid}>
             {SUBJECTS.map(s => (
@@ -431,15 +434,48 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── EXAM MODE ── */}
+      <section className={styles.section} id="exam-mode">
+        <div className={styles.sectionInner}>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionTag}>Flexible Assessment</span>
+            <h2 className={styles.sectionTitle}>Adapt to Your Assessment Needs</h2>
+            <p className={styles.sectionSub}>From traditional exams to continuous assessment, EvalAI fits your workflow</p>
+          </div>
+          <div className={styles.examModeGrid}>
+            <div className={styles.examModeCard}>
+              <div className={styles.examModeIcon}>📝</div>
+              <h3 className={styles.examModeTitle}>Traditional Exams</h3>
+              <p className={styles.examModeDesc}>Midterms, finals, and standardized tests with secure batch processing</p>
+            </div>
+            <div className={styles.examModeCard}>
+              <div className={styles.examModeIcon}>🔄</div>
+              <h3 className={styles.examModeTitle}>Continuous Assessment</h3>
+              <p className={styles.examModeDesc}>Weekly quizzes, assignments, and formative evaluations with instant feedback</p>
+            </div>
+            <div className={styles.examModeCard}>
+              <div className={styles.examModeIcon}>👥</div>
+              <h3 className={styles.examModeTitle}>Group Projects</h3>
+              <p className={styles.examModeDesc}>Evaluate collaborative work with individual contribution tracking</p>
+            </div>
+            <div className={styles.examModeCard}>
+              <div className={styles.examModeIcon}>📋</div>
+              <h3 className={styles.examModeTitle}>Practical Assessments</h3>
+              <p className={styles.examModeDesc}>Lab reports, case studies, and hands-on evaluations with rubric-based scoring</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── CONTACT ── */}
       <ContactSection />
 
       {/* ── CTA BANNER ── */}
       <section className={styles.ctaBanner}>
         <div className={styles.ctaBannerInner}>
-          <h2 className={styles.ctaBannerTitle}>Ready to modernize your grading?</h2>
-          <p className={styles.ctaBannerSub}>Join educators using AI to evaluate faster, fairer, and smarter.</p>
-          <button className={styles.ctaBannerBtn} onClick={() => navigate('/register')}>🎓 Create Free Account</button>
+          <h2 className={styles.ctaBannerTitle}>Join 500+ Institutions Saving 10+ Hours Weekly</h2>
+          <p className={styles.ctaBannerSub}>Experience AI-powered grading that's accurate, fair, and designed specifically for educators like you.</p>
+          <button className={styles.ctaBannerBtn} onClick={() => navigate('/register')}>🚀 Start Free Trial →</button>
         </div>
       </section>
 

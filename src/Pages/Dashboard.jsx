@@ -17,7 +17,7 @@ import WelcomeBanner from '../components/WelcomeBanner';
 
 import appStyles from '../App.module.css';
 
-const VALID_TABS = ['subjects', 'evaluation', 'pdf', 'analytics', 'settings'];
+const VALID_TABS = ['home', 'subjects', 'evaluation', 'pdf', 'analytics', 'settings'];
 
 export default function Dashboard() {
   const { tab } = useParams();
@@ -39,18 +39,18 @@ export default function Dashboard() {
         dispatch({ type: 'SET_TAB', payload: tab });
       }
     } else {
-      navigate(`/dashboard/${state.activeTab || 'subjects'}`, { replace: true });
+      navigate(`/dashboard/${state.activeTab || 'home'}`, { replace: true });
     }
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const currentTab = state.activeTab || 'subjects';
+    const currentTab = state.activeTab || 'home';
     if (tab !== currentTab) {
       navigate(`/dashboard/${currentTab}`, { replace: true });
     }
   }, [state.activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeTab = state.activeTab || 'subjects';
+  const activeTab = state.activeTab || 'home';
   const planId    = subState.planId;
   const isLocked  = !isActive || (planId && !canAccess(planId, activeTab));
   const userName  = state.authUser?.displayName?.split(' ')[0] || 'Educator';
@@ -59,8 +59,14 @@ export default function Dashboard() {
     navigate('/pricing');
   }
 
+  function handleTabNavigation(tabId) {
+    dispatch({ type: 'SET_TAB', payload: tabId });
+    navigate(`/dashboard/${tabId}`);
+  }
+
   // ── Build panels — Analytics gets the context callback ────────────────────
   const PANELS = {
+    home:        <WelcomeBanner userName={userName} planName={subState.planName} onNavigate={handleTabNavigation} />,
     subjects:   <SubjectManager />,
     evaluation: <EvaluationPanel />,
     pdf:        <PDFTools />,
@@ -81,11 +87,6 @@ export default function Dashboard() {
           </ScrollReveal>
         )}
       </main>
-
-      {/* Welcome Banner for logged in users */}
-      {isActive && (
-        <WelcomeBanner userName={userName} planName={subState.planName} />
-      )}
 
       {/* Chatbot — only rendered when user is authenticated and has an active plan */}
       {isActive && (

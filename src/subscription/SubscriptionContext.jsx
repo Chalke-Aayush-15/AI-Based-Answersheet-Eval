@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useRef } from 'react';
-import { canAccess, isTrialExpired, trialDaysRemaining } from './plans';
+import { canAccess, isTrialExpired, normalizePlanId, PLANS, trialDaysRemaining } from './plans';
 import { paymentsAPI } from '../services/api';
 import { useApp } from '../context/AppContext';
 
@@ -89,13 +89,13 @@ export function SubscriptionProvider({ children }) {
 
     const cached = loadFromStorage(userId);
     if (cached?.planId) {
-      dispatch({ type: 'ACTIVATE_PLAN', payload: { planId: cached.planId } });
+      dispatch({ type: 'ACTIVATE_PLAN', payload: { planId: normalizePlanId(cached.planId) } });
     }
 
     paymentsAPI
       .status()
       .then((res) => {
-        const planId = res?.planId ?? null;
+        const planId = normalizePlanId(res?.planId ?? null);
         const activatedAt = res?.activatedAt ?? null;
         dispatch({ type: 'HYDRATE_PLAN', payload: { planId, activatedAt } });
         if (planId) {
@@ -107,7 +107,10 @@ export function SubscriptionProvider({ children }) {
       .catch(() => {
         dispatch({
           type: 'HYDRATE_PLAN',
-          payload: { planId: cached?.planId ?? null, activatedAt: cached?.activatedAt ?? null },
+          payload: {
+            planId: normalizePlanId(cached?.planId ?? null),
+            activatedAt: cached?.activatedAt ?? null,
+          },
         });
       });
   }, [authUser, authChecked, userId]);
@@ -145,7 +148,16 @@ export function SubscriptionProvider({ children }) {
 
   return (
     <SubscriptionContext.Provider
-      value={{ state, dispatch, isActive, daysLeft, checkAccess, activatePlan, cancelPlan }}
+      value={{
+        state,
+        dispatch,
+        isActive,
+        daysLeft,
+        planName: PLANS[state.planId]?.name || null,
+        checkAccess,
+        activatePlan,
+        cancelPlan,
+      }}
     >
       {children}
     </SubscriptionContext.Provider>

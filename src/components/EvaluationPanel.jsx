@@ -252,24 +252,6 @@ export default function EvaluationPanel() {
       <div className={styles.layout}>
         {/* ── Left sidebar ─────────────────────────────────────────────── */}
         <div className={styles.sidebar}>
-          {/* Scoring Weights */}
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>⚖️ Scoring Weights</div>
-            <div className={styles.weightList}>
-              {SCORE_WEIGHTS.map(w => <WeightBar key={w.label} {...w} />)}
-            </div>
-            <div className={styles.markScheme}>
-              <div className={styles.markItem}>
-                <span>Main Questions (Q1, Q2…)</span>
-                <span className={styles.markVal}>10 marks</span>
-              </div>
-              <div className={styles.markItem}>
-                <span>Sub-Questions (Q1a, Q2b…)</span>
-                <span className={styles.markVal}>5 marks</span>
-              </div>
-            </div>
-          </div>
-
           {/* Options */}
           <div className={styles.card}>
             <div className={styles.cardTitle}>⚙️ Options</div>
@@ -457,6 +439,16 @@ export default function EvaluationPanel() {
 
         {/* ── Right: Log Panel ──────────────────────────────────────────── */}
         <div className={styles.logPanel}>
+          <div className={styles.logWeights}>
+            <div className={styles.logWeightsTitle}>⚖️ Scoring Weights</div>
+            <div className={styles.logWeightList}>
+              {SCORE_WEIGHTS.map(w => <WeightBar key={w.label} {...w} />)}
+            </div>
+            <div className={styles.logMarkScheme}>
+              <span>Main Questions: <strong>10 marks</strong></span>
+              <span>Sub-Questions: <strong>5 marks</strong></span>
+            </div>
+          </div>
           <div className={styles.logHeader}>
             <span className={styles.logTitle}>📜 Evaluation Log</span>
             <div className={styles.logActions}>

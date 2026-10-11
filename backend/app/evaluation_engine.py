@@ -377,6 +377,7 @@ class PDFProcessor:
 
     def __init__(self, nvidia_api_key: str, language: Optional[str] = None):
         self.nvidia_api_key = nvidia_api_key
+        self.language = language
         # Set model based on language selection
         if language and language.strip():
             self.NVIDIA_MODEL = "NVIDIA Nemotron OCR v2"
@@ -387,6 +388,29 @@ class PDFProcessor:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+    def _get_ocr_prompt(self) -> str:
+        """Return the OCR prompt, appending a language hint when a non-English language is selected."""
+        prompt = self.OCR_PROMPT
+        if self.language and self.language.strip():
+            lang_names = {
+                'hi': 'Hindi',       'mr': 'Marathi',     'ta': 'Tamil',
+                'te': 'Telugu',      'bn': 'Bengali',     'gu': 'Gujarati',
+                'kn': 'Kannada',     'ml': 'Malayalam',    'pa': 'Punjabi',
+                'ur': 'Urdu',        'fr': 'French',      'de': 'German',
+                'es': 'Spanish',     'it': 'Italian',     'pt': 'Portuguese',
+                'ru': 'Russian',     'nl': 'Dutch',       'zh': 'Chinese',
+                'ja': 'Japanese',    'ko': 'Korean',      'th': 'Thai',
+                'vi': 'Vietnamese',  'ar': 'Arabic',      'fa': 'Persian',
+                'he': 'Hebrew',
+            }
+            lang_label = lang_names.get(self.language.strip(), self.language.strip())
+            prompt += (
+                f"\n8. The answer sheet is written in {lang_label}. "
+                f"Transcribe the {lang_label} text exactly as written using its native script. "
+                f"Do NOT transliterate to English."
+            )
+        return prompt
 
     # ── Text extraction (digital PDF fast-path) ──────────────────────────────
 
@@ -415,7 +439,8 @@ class PDFProcessor:
             log("❌ pdf2image or Pillow not installed.")
             return None
 
-        log(f"🚀 NVIDIA NIM OCR: {os.path.basename(pdf_path)}")
+        lang_info = f" [lang={self.language}]" if self.language else ""
+        log(f"🚀 NVIDIA NIM OCR: {os.path.basename(pdf_path)}{lang_info}")
         images = self._pdf_to_images(pdf_path, log)
         if images is None:
             return None
@@ -495,7 +520,7 @@ class PDFProcessor:
             "model": self.NVIDIA_MODEL,
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                {"type": "text", "text": self.OCR_PROMPT},
+                {"type": "text", "text": self._get_ocr_prompt()},
             ]}],
             "max_tokens": 2048,
             "temperature": 0.0,

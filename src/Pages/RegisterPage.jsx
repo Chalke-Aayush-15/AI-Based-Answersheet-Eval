@@ -74,11 +74,11 @@ export default function RegisterPage({ onRegister }) {
             <span className={styles.leftBrandName}>EvalAI Grader</span>
           </div>
           <h2 className={styles.leftTitle}>
-            Join thousands of<br />
-            <span className={styles.leftAccent}>smart educators.</span>
+            Start Your AI Grading Journey<br />
+            <span className={styles.leftAccent}>Free Forever, No Credit Card</span>
           </h2>
           <p className={styles.leftDesc}>
-            Create your free account and start evaluating answer sheets with AI-powered FAIR scoring today.
+            Sign up in under 60 seconds and begin transforming your grading workflow with our AI-powered evaluation platform.
           </p>
 
           <div className={styles.stepIndicators}>

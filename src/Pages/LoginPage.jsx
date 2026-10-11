@@ -46,18 +46,18 @@ export default function LoginPage({ onLogin }) {
             <span className={styles.leftBrandName}>EvalAI Grader</span>
           </div>
           <h2 className={styles.leftTitle}>
-            Grade smarter.<br />
-            <span className={styles.leftAccent}>Not harder.</span>
+            Transform Your Grading Workflow<br />
+            <span className={styles.leftAccent}>With AI-Powered Precision</span>
           </h2>
           <p className={styles.leftDesc}>
-            AI-powered evaluation for educators — evaluate hundreds of answer sheets in seconds with FAIR scoring.
+            Join educators worldwide who are saving hours on grading while providing richer, more meaningful feedback to their students.
           </p>
           <div className={styles.leftFeatures}>
             {[
-              { icon: '🧠', text: 'NLP Semantic Understanding' },
-              { icon: '⚡', text: '10x Faster than Manual Grading' },
-              { icon: '📊', text: 'Detailed Analytics & Reports' },
-              { icon: '✉️', text: 'Automated Email to Students' },
+              { icon: '🎯', text: 'Human-Level Accuracy' },
+              { icon: '⏱️', text: 'Save 80% Grading Time' },
+              { icon: '📊', text: 'Deep Learning Analytics' },
+              { icon: '📧', text: 'Automated Student Feedback' },
             ].map(f => (
               <div key={f.text} className={styles.leftFeature}>
                 <span className={styles.leftFeatureIcon}>{f.icon}</span>

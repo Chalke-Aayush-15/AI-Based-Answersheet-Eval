@@ -26,12 +26,10 @@ function PlanCard({ plan, isCurrentPlan, onSelect, loadingPlan, animDelay }) {
       className={`${styles.card} ${plan.popular ? styles.cardPopular : ''} ${isCurrentPlan ? styles.cardActive : ''}`}
       style={{ animationDelay: `${animDelay}s`, borderColor: isCurrentPlan ? plan.color : '' }}
     >
-      {plan.popular && (
-        <div className={styles.popularBadge} style={{ background: plan.color }}>🥇 Most Popular</div>
-      )}
-      {isCurrentPlan && (
-        <div className={styles.activeBadge} style={{ background: plan.color }}>✅ Current Plan</div>
-      )}
+      <div className={styles.cardBadges}>
+        {plan.popular && <span className={styles.popularBadge}>Most popular</span>}
+        {isCurrentPlan && <span className={styles.activeBadge}>Current plan</span>}
+      </div>
 
       <div className={styles.cardHeader} style={{ background: plan.bgGradient }}>
         <div className={styles.planBadge}>{plan.badge}</div>
@@ -141,7 +139,7 @@ export default function PricingPage() {
           name:        'EvalAI Grader',
           description: `${order.plan_name} Plan Subscription`,
           order_id:    order.order_id,
-          theme:       { color: planId === 'gold' ? '#D97706' : '#64748B' },
+          theme:       { color: PLANS[planId].color },
           handler: async (response) => {
             try {
               // 4. Verify payment + save to MongoDB
@@ -194,8 +192,6 @@ export default function PricingPage() {
     <div className={styles.page}>
       {/* Background */}
       <div className={styles.bg}>
-        <div className={styles.bgBlob1} />
-        <div className={styles.bgBlob2} />
         <div className={styles.bgGrid} />
       </div>
 
@@ -216,19 +212,6 @@ export default function PricingPage() {
             Start free for 5 days, then pick the plan that fits your institution's needs.
           </p>
 
-          <div className={styles.comparisonChips}>
-            <div className={styles.chip} style={{ borderColor: '#9CA3AF', color: '#6B7280' }}>
-              ⏱️ Free Trial — All features · 5 days
-            </div>
-            <div className={styles.chipArrow}>→</div>
-            <div className={styles.chip} style={{ borderColor: '#94A3B8', color: '#64748B' }}>
-              🥈 Silver — Subjects + Evaluation
-            </div>
-            <div className={styles.chipArrow}>→</div>
-            <div className={styles.chip} style={{ borderColor: '#F59E0B', color: '#D97706', background: '#FFFBEB' }}>
-              🥇 Gold — Everything Unlocked
-            </div>
-          </div>
         </div>
 
         {/* Error banner */}

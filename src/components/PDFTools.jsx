@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ocrAPI, evaluationAPI } from '../services/api';
 import styles from './PDFTools.module.css';
@@ -10,8 +10,11 @@ export default function PDFTools() {
   const [selectedFiles,  setSelectedFiles]  = useState([]);   // File[]
   const [dragging,       setDragging]       = useState(false);
   const [forceOcr,       setForceOcr]       = useState(false);
+  const [ocrLanguage,    setOcrLanguage]    = useState('');    // '' = auto (English)
   const [results,        setResults]        = useState([]);   // OCR result objects
   const [resultFiles,    setResultFiles]    = useState([]);   // available downloads
+  const logBodyRef = useRef(null);
+  const followLogsRef = useRef(true);
 
   // ── Log helper ────────────────────────────────────────────────────────────
   function addLog(text) {
@@ -21,18 +24,32 @@ export default function PDFTools() {
     });
   }
 
+  useEffect(() => {
+    const logBody = logBodyRef.current;
+    if (logBody && followLogsRef.current) {
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+  }, [state.pdfLogs]);
+
+  function handleLogScroll(event) {
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    followLogsRef.current = scrollHeight - scrollTop - clientHeight < 48;
+  }
+
   // ── Process PDFs via real API ─────────────────────────────────────────────
   async function handleProcess() {
     if (!selectedFiles.length) return alert('Please select PDF files to process.');
 
     setProcessing(true);
     setResults([]);
+    followLogsRef.current = true;
     dispatch({ type: 'CLEAR_PDF_LOGS' });
 
     addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     addLog('🔍 Starting NVIDIA NIM OCR Processing...');
     addLog(`📂 Files: ${selectedFiles.length}`);
     addLog(`🔑 Force OCR: ${forceOcr ? 'YES' : 'NO (auto-detect)'}`);
+    addLog(`🌐 Language: ${ocrLanguage || 'English (default)'}`);
     addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     try {
@@ -44,7 +61,7 @@ export default function PDFTools() {
         addLog(`\n📄 Processing: ${f.name}`);
         addLog('   📡 Uploading to FastAPI /ocr/extract-text...');
 
-        const data = await ocrAPI.extractText(f, forceOcr, (line) => addLog(`   ${line}`));
+        const data = await ocrAPI.extractText(f, forceOcr, (line) => addLog(`   ${line}`), ocrLanguage);
 
         addLog(`   ✅ Method: ${data.method_used}`);
         addLog(`   📊 Extracted: ${data.char_count} characters`);
@@ -53,7 +70,7 @@ export default function PDFTools() {
       } else {
         // ── Batch ─────────────────────────────────────────────────────────
         addLog(`\n📡 Uploading ${selectedFiles.length} files to /ocr/extract-text-batch...`);
-        const data = await ocrAPI.extractBatch(selectedFiles, forceOcr);
+        const data = await ocrAPI.extractBatch(selectedFiles, forceOcr, ocrLanguage);
 
         data.results.forEach(r => {
           const icon = r.success ? '✅' : '❌';
@@ -226,43 +243,6 @@ export default function PDFTools() {
             )}
           </div>
 
-          {/* OCR Settings */}
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>🔧 OCR Settings</div>
-
-            <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>Output Directory</label>
-              <input
-                className={styles.settingInput}
-                type="text"
-                value={state.settings.outputDir || 'extracted_pdfs'}
-                onChange={(e) =>
-                  dispatch({ type: 'UPDATE_SETTINGS', payload: { outputDir: e.target.value } })
-                }
-              />
-            </div>
-
-            <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>Force OCR</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={forceOcr}
-                  onChange={(e) => setForceOcr(e.target.checked)}
-                />
-                <span style={{ fontSize: 12, color: '#6B7280' }}>
-                  Always use NVIDIA NIM (skip PyPDF2 fast-path)
-                </span>
-              </label>
-            </div>
-
-            <div style={{ marginTop: 8, padding: '8px 10px', background: '#F0FDF4', borderRadius: 6, fontSize: 11, color: '#166534' }}>
-              <strong>Engine:</strong> NVIDIA NIM <code>llama-3.2-11b-vision-instruct</code>
-              <br />
-              <strong>Fallback:</strong> PyPDF2 (digital PDFs)
-            </div>
-          </div>
-
           <button
             className={`${styles.processBtn} ${processing ? styles.processing : ''}`}
             onClick={handleProcess}
@@ -326,13 +306,94 @@ export default function PDFTools() {
 
         {/* ── Log Panel ─────────────────────────────────────────────────── */}
         <div className={styles.logPanel}>
+          <div className={`${styles.card} ${styles.logSettings}`}>
+            <div className={styles.cardTitle}>🔧 OCR Settings</div>
+
+            <div className={`${styles.settingRow} ${styles.outputSetting}`}>
+              <label className={styles.settingLabel}>Output Directory</label>
+              <input
+                className={styles.settingInput}
+                type="text"
+                value={state.settings.outputDir || 'extracted_pdfs'}
+                onChange={(e) =>
+                  dispatch({ type: 'UPDATE_SETTINGS', payload: { outputDir: e.target.value } })
+                }
+              />
+            </div>
+
+            <div className={`${styles.settingRow} ${styles.forceSetting}`}>
+              <label className={styles.settingLabel}>Force OCR</label>
+              <label className={styles.forceOcrControl}>
+                <input
+                  type="checkbox"
+                  checked={forceOcr}
+                  onChange={(e) => setForceOcr(e.target.checked)}
+                />
+                <span>Always use NVIDIA NIM (skip PyPDF2 fast-path)</span>
+              </label>
+            </div>
+
+            <div className={`${styles.settingRow} ${styles.langSetting}`}>
+              <label className={styles.settingLabel}>OCR Language</label>
+              <select
+                className={styles.settingSelect}
+                value={ocrLanguage}
+                onChange={(e) => setOcrLanguage(e.target.value)}
+              >
+                <optgroup label="Default">
+                  <option value="">English (Auto-detect)</option>
+                </optgroup>
+                <optgroup label="Indian Languages">
+                  <option value="hi">हिन्दी — Hindi</option>
+                  <option value="mr">मराठी — Marathi</option>
+                  <option value="ta">தமிழ் — Tamil</option>
+                  <option value="te">తెలుగు — Telugu</option>
+                  <option value="bn">বাংলা — Bengali</option>
+                  <option value="gu">ગુજરાતી — Gujarati</option>
+                  <option value="kn">ಕನ್ನಡ — Kannada</option>
+                  <option value="ml">മലയാളം — Malayalam</option>
+                  <option value="pa">ਪੰਜਾਬੀ — Punjabi</option>
+                  <option value="ur">اردو — Urdu</option>
+                </optgroup>
+                <optgroup label="European Languages">
+                  <option value="fr">Français — French</option>
+                  <option value="de">Deutsch — German</option>
+                  <option value="es">Español — Spanish</option>
+                  <option value="it">Italiano — Italian</option>
+                  <option value="pt">Português — Portuguese</option>
+                  <option value="ru">Русский — Russian</option>
+                  <option value="nl">Nederlands — Dutch</option>
+                </optgroup>
+                <optgroup label="Asian Languages">
+                  <option value="zh">中文 — Chinese</option>
+                  <option value="ja">日本語 — Japanese</option>
+                  <option value="ko">한국어 — Korean</option>
+                  <option value="th">ไทย — Thai</option>
+                  <option value="vi">Tiếng Việt — Vietnamese</option>
+                </optgroup>
+                <optgroup label="Middle Eastern">
+                  <option value="ar">العربية — Arabic</option>
+                  <option value="fa">فارسی — Persian</option>
+                  <option value="he">עברית — Hebrew</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div className={styles.engineNote}>
+              <strong>Engine:</strong> {ocrLanguage
+                ? <><code>Nemotron OCR v2</code> — Multi-language mode</>
+                : <><code>llama-3.2-11b-vision-instruct</code></>
+              }
+              <span><strong>Fallback:</strong> PyPDF2 (digital PDFs)</span>
+            </div>
+          </div>
           <div className={styles.logHeader}>
             <span className={styles.logTitle}>📜 OCR Processing Log</span>
             <button className={styles.logClearBtn} onClick={() => dispatch({ type: 'CLEAR_PDF_LOGS' })}>
               Clear
             </button>
           </div>
-          <div className={styles.logBody}>
+          <div className={styles.logBody} ref={logBodyRef} onScroll={handleLogScroll}>
             {state.pdfLogs.length === 0 ? (
               <div className={styles.logEmpty}>
                 <span>📄</span>
