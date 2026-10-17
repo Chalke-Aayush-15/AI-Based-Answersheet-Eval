@@ -15,7 +15,9 @@ import smtplib
 import ssl
 import asyncio
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from threading import Lock
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -28,10 +30,11 @@ import requests
 import numpy as np
 import pandas as pd
 from PyPDF2 import PdfReader, PdfWriter
+from app.processing import ProcessingError
 
 # ── Optional heavy deps ──────────────────────────────────────────────────────
 try:
-    from pdf2image import convert_from_path
+    from pdf2image import convert_from_path, pdfinfo_from_path
     PDF2IMAGE_AVAILABLE = True
 except ImportError:
     PDF2IMAGE_AVAILABLE = False
@@ -50,14 +53,39 @@ except ImportError:
     SEMANTIC_AVAILABLE = False
 
 # ── Poppler (Windows only) ────────────────────────────────────────────────────
-POPPLER_PATH = r"C:\poppler\poppler-25.12.0\Library\bin"   # Set via env var on Windows
+POPPLER_PATH = os.getenv("POPPLER_PATH", r"C:\poppler\poppler-25.12.0\Library\bin")
 
 # ── OCR Optimization Settings ──────────────────────────────────────────────────
-OCR_MAX_WORKERS = 4          # Max concurrent OCR requests
-OCR_DPI = 150                # Reduced DPI for faster processing (was 200)
-OCR_TIMEOUT = 90             # Request timeout in seconds
-OCR_RETRY_DELAY = 3          # Delay between retries
-OCR_RATE_LIMIT_DELAY = 1     # Small delay between concurrent requests to avoid 429
+OCR_MAX_WORKERS = max(1, int(os.getenv("OCR_MAX_WORKERS", "1")))
+OCR_DPI = max(72, int(os.getenv("OCR_DPI", "120")))
+OCR_TIMEOUT = max(1, int(os.getenv("OCR_TIMEOUT", "90")))
+OCR_RETRY_DELAY = 3
+OCR_RATE_LIMIT_DELAY = 1
+
+_semantic_model = None
+_semantic_model_lock = Lock()
+_semantic_inference_lock = Lock()
+
+
+def _get_semantic_model():
+    """Load once per process, including when requests arrive concurrently."""
+    global _semantic_model
+    with _semantic_model_lock:
+        if _semantic_model is None:
+            _semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+        return _semantic_model
+
+
+def _retry_after_seconds(value, fallback):
+    """Accept Retry-After seconds or an HTTP date, bounded to 120 seconds."""
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        try:
+            seconds = (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
+        except (TypeError, ValueError, OverflowError):
+            seconds = fallback
+    return max(0, min(120, seconds))
 
 
 # ===========================================================================
@@ -87,7 +115,7 @@ class FairEvaluationEngine:
 
         if self.semantic_enabled:
             try:
-                self.model = SentenceTransformer("all-MiniLM-L6-v2")
+                self.model = _get_semantic_model()
             except Exception as e:
                 print(f"⚠️ Semantic model load failed: {e}")
                 self.semantic_enabled = False
@@ -164,7 +192,8 @@ class FairEvaluationEngine:
             sp = self.preprocess_text(student)
             if not sp:
                 return 0.0
-            embs = self.model.encode([mp, sp], convert_to_tensor=True)
+            with _semantic_inference_lock:
+                embs = self.model.encode([mp, sp], convert_to_tensor=True)
             sim = float(st_util.pytorch_cos_sim(embs[0], embs[1])[0][0])
             score = sim * 10
             if sim > 0.85:
@@ -378,11 +407,8 @@ class PDFProcessor:
     def __init__(self, nvidia_api_key: str, language: Optional[str] = None):
         self.nvidia_api_key = nvidia_api_key
         self.language = language
-        # Set model based on language selection
-        if language and language.strip():
-            self.NVIDIA_MODEL = "NVIDIA Nemotron OCR v2"
-        else:
-            self.NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct"
+        # Language belongs in the prompt, not in an unsupported model display name.
+        self.NVIDIA_MODEL = os.getenv("NVIDIA_OCR_MODEL", self.NVIDIA_MODEL)
         self._headers = {
             "Authorization": f"Bearer {nvidia_api_key}",
             "Content-Type": "application/json",
@@ -436,23 +462,36 @@ class PDFProcessor:
             print(msg)
 
         if not PDF2IMAGE_AVAILABLE or not PIL_AVAILABLE:
-            log("❌ pdf2image or Pillow not installed.")
-            return None
+            raise ProcessingError("OCR requires pdf2image and Pillow on the backend.", 503)
+        if not self.nvidia_api_key:
+            raise ProcessingError("The backend NVIDIA API key is not configured.", 503)
 
         lang_info = f" [lang={self.language}]" if self.language else ""
         log(f"🚀 NVIDIA NIM OCR: {os.path.basename(pdf_path)}{lang_info}")
-        images = self._pdf_to_images(pdf_path, log)
-        if images is None:
-            return None
+        poppler = POPPLER_PATH if POPPLER_PATH and os.path.isdir(POPPLER_PATH) else None
+        try:
+            total = int(pdfinfo_from_path(pdf_path, poppler_path=poppler, timeout=30)["Pages"])
+        except Exception as exc:
+            log(f"❌ PDF metadata failed ({type(exc).__name__}).")
+            raise ProcessingError(
+                "Could not read PDF metadata. Check the PDF and install Poppler on the backend.", 422,
+            ) from exc
+        if total < 1:
+            raise ProcessingError("The PDF contains no pages.", 422)
 
-        total = len(images)
-        log(f"📄 {total} page(s). Using parallel OCR ({OCR_MAX_WORKERS} workers)…")
-
-        # Parallel OCR processing
-        parts = self._ocr_pages_parallel(images, log)
-
-        if not parts:
-            return None
+        log(f"📄 {total} page(s). OCR batch size: {OCR_MAX_WORKERS}.")
+        parts = []
+        # Render only a bounded batch, never the entire document into RAM.
+        for first_page in range(1, total + 1, OCR_MAX_WORKERS):
+            last_page = min(total, first_page + OCR_MAX_WORKERS - 1)
+            images = self._pdf_to_images(pdf_path, log, first_page, last_page)
+            try:
+                if len(images) != last_page - first_page + 1:
+                    raise ProcessingError("PDF conversion returned missing pages. Evaluation stopped.", 422)
+                parts.extend(self._ocr_pages_parallel(images, log, first_page))
+            finally:
+                for image in images:
+                    image.close()
 
         combined = "\n\n".join(parts)
         combined = re.sub(r"[ \t]+", " ", combined)
@@ -460,20 +499,17 @@ class PDFProcessor:
         log(f"✅ OCR complete — {len(combined)} chars from {total} page(s).")
         return combined.strip()
 
-    def _ocr_pages_parallel(self, images: list, log_fn) -> list:
+    def _ocr_pages_parallel(self, images: list, log_fn, first_page: int = 1) -> list:
         """Process multiple pages in parallel using ThreadPoolExecutor."""
         results = [None] * len(images)  # Preserve order
 
         def process_page(idx_img):
             idx, img = idx_img
-            try:
-                # Small stagger to avoid rate limiting
+            # Stagger is local to this small batch, not the whole PDF.
+            if idx:
                 time.sleep(idx * OCR_RATE_LIMIT_DELAY)
-                text = self._ocr_page(img, idx + 1, log_fn)
-                return (idx, text)
-            except Exception as e:
-                log_fn(f"❌ Page {idx + 1} error: {e}")
-                return (idx, "")
+            text = self._ocr_page(img, first_page + idx, log_fn)
+            return (idx, text)
 
         # Use ThreadPoolExecutor for parallel processing
         with concurrent.futures.ThreadPoolExecutor(max_workers=OCR_MAX_WORKERS) as executor:
@@ -482,23 +518,31 @@ class PDFProcessor:
         # Collect results in order
         for idx, text in futures:
             if text:
-                results[idx] = f"--- Page {idx + 1} ---\n{text}"
-                log_fn(f"  ✅ Page {idx + 1}: {len(text)} chars")
+                results[idx] = f"--- Page {first_page + idx} ---\n{text}"
+                log_fn(f"  ✅ Page {first_page + idx}: {len(text)} chars")
             else:
-                log_fn(f"  ⚠️ Page {idx + 1}: no text extracted")
+                raise ProcessingError(
+                    f"No text extracted from page {first_page + idx}. Evaluation stopped to avoid incomplete grading.",
+                    422,
+                )
 
         return [r for r in results if r]
 
-    def _pdf_to_images(self, pdf_path: str, log_fn):
+    def _pdf_to_images(self, pdf_path: str, log_fn, first_page: int, last_page: int):
         poppler = POPPLER_PATH if POPPLER_PATH and os.path.isdir(POPPLER_PATH) else None
         try:
-            kwargs = {"dpi": OCR_DPI, "fmt": "jpeg", "thread_count": 4}
+            kwargs = {
+                "dpi": OCR_DPI, "fmt": "jpeg", "thread_count": 1,
+                "first_page": first_page, "last_page": last_page, "timeout": 60,
+            }
             if poppler:
                 kwargs["poppler_path"] = poppler
             return convert_from_path(pdf_path, **kwargs)
         except Exception as e:
-            log_fn(f"❌ PDF→Image failed: {e}")
-            return None
+            log_fn(f"❌ PDF→Image failed ({type(e).__name__}).")
+            raise ProcessingError(
+                "PDF conversion failed. Check the PDF and the backend Poppler installation.", 422,
+            ) from e
 
     def _image_to_b64(self, img) -> str:
         buf = io.BytesIO()
@@ -528,34 +572,57 @@ class PDFProcessor:
             "stream": False,
         }
 
-        for attempt in range(1, 4):  # Increased retries to 3
+        failure = ProcessingError(f"NVIDIA OCR failed on page {page_num}.")
+        for attempt in range(1, 4):
+            wait = OCR_RETRY_DELAY * (2 ** (attempt - 1))
             try:
-                resp = requests.post(self.NVIDIA_URL, headers=self._headers,
-                                     json=payload, timeout=OCR_TIMEOUT)
-                if resp.status_code == 200:
-                    choices = resp.json().get("choices", [])
-                    return choices[0].get("message", {}).get("content", "").strip() if choices else ""
-                if resp.status_code == 429:
-                    # Exponential backoff for rate limiting
-                    wait = OCR_RETRY_DELAY * (2 ** attempt)
-                    log_fn(f"⏳ Page {page_num} rate limited — waiting {wait}s…")
-                    time.sleep(wait)
-                    continue
-                if resp.status_code == 401:
-                    log_fn("❌ Invalid NVIDIA API key.")
-                    return ""
-                # Other errors - retry
-                if attempt < 3:
-                    time.sleep(OCR_RETRY_DELAY)
+                with requests.post(
+                    self.NVIDIA_URL, headers=self._headers, json=payload,
+                    timeout=(10, OCR_TIMEOUT),
+                ) as resp:
+                    status = resp.status_code
+                    log_fn(f"NVIDIA OCR page {page_num}, attempt {attempt}: HTTP {status}")
+                    if status == 200:
+                        data = resp.json()
+                        choices = data.get("choices") if isinstance(data, dict) else None
+                        choice = choices[0] if isinstance(choices, list) and choices else None
+                        message = choice.get("message") if isinstance(choice, dict) else None
+                        text = message.get("content") if isinstance(message, dict) else None
+                        if isinstance(text, str) and text.strip():
+                            return text.strip()
+                        failure = ProcessingError(f"NVIDIA returned no OCR text for page {page_num}.")
+                    elif status in (401, 403):
+                        raise ProcessingError(
+                            "NVIDIA rejected the backend API key. Check its validity and model permissions.", 503,
+                        )
+                    elif status in (400, 404, 422):
+                        raise ProcessingError(
+                            f"NVIDIA rejected the OCR model or image (HTTP {status}). "
+                            "Check NVIDIA_OCR_MODEL and its supported API format.",
+                        )
+                    elif status == 429 or status in (408, 500, 502, 503, 504):
+                        failure = ProcessingError(
+                            "NVIDIA OCR is rate limited. Please try again shortly."
+                            if status == 429 else f"NVIDIA OCR is temporarily unavailable (HTTP {status}).",
+                            429 if status == 429 else 502,
+                        )
+                        wait = _retry_after_seconds(resp.headers.get("Retry-After"), wait)
+                    else:
+                        raise ProcessingError(f"NVIDIA OCR rejected the request (HTTP {status}).")
             except requests.exceptions.Timeout:
+                failure = ProcessingError(f"NVIDIA OCR timed out on page {page_num}. Please try again.", 504)
                 log_fn(f"⏱️ Page {page_num} timeout (attempt {attempt})")
-                if attempt < 3:
-                    time.sleep(OCR_RETRY_DELAY)
-            except Exception as e:
-                log_fn(f"❌ Page {page_num} error: {e}")
-                if attempt < 3:
-                    time.sleep(OCR_RETRY_DELAY)
-        return ""
+            except requests.exceptions.JSONDecodeError:
+                failure = ProcessingError("NVIDIA returned an invalid OCR response.")
+            except requests.exceptions.RequestException:
+                failure = ProcessingError("Could not connect to NVIDIA OCR. Please try again.")
+                log_fn(f"❌ NVIDIA connection failed on page {page_num} (attempt {attempt}).")
+            except ValueError:
+                failure = ProcessingError("NVIDIA returned an invalid OCR response.")
+            if attempt < 3:
+                log_fn(f"⏳ Retrying page {page_num} in {wait}s…")
+                time.sleep(wait)
+        raise failure
 
 
 # ===========================================================================

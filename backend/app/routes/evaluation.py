@@ -19,6 +19,7 @@ from app.models import UserInDB as User
 from app.auth import get_current_user
 from app.config import settings
 from app.evaluation_engine import MultiSubjectEvaluator
+from app.processing import ProcessingError, limited_processing
 
 router = APIRouter(prefix="/evaluation", tags=["Evaluation"])
 
@@ -77,7 +78,8 @@ class EmailRequest(BaseModel):
     "/evaluate-subject",
     summary="Evaluate one subject: upload master PDF + student PDFs",
 )
-async def evaluate_subject(
+@limited_processing
+def evaluate_subject(
     background_tasks: BackgroundTasks,
     subject_name: str = Form(..., description="Subject name, e.g. 'Software Engineering'"),
     master_pdf:   UploadFile = File(..., description="Master answer-key PDF"),
@@ -146,6 +148,8 @@ async def evaluate_subject(
 
         return JSONResponse(content=response)
 
+    except ProcessingError:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -187,7 +191,8 @@ async def evaluate_multi_subject(
     "/evaluate-batch",
     summary="Submit multiple subjects as separate form parts (recommended)",
 )
-async def evaluate_batch(
+@limited_processing
+def evaluate_batch(
     background_tasks: BackgroundTasks,
     # Each subject is prefixed: subject_name_0, master_0, students_0
     # We receive raw form and parse manually
@@ -274,6 +279,8 @@ async def evaluate_batch(
 
         return JSONResponse(content=response)
 
+    except ProcessingError:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -286,7 +293,7 @@ async def evaluate_batch(
 
 
 @router.post("/send-emails", summary="Send result emails to students")
-async def send_result_emails(
+def send_result_emails(
     payload: EmailRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -305,7 +312,7 @@ async def send_result_emails(
 
 
 @router.post("/test-email", summary="Test SMTP connection")
-async def test_email(current_user: User = Depends(get_current_user)):
+def test_email(current_user: User = Depends(get_current_user)):
     evaluator = _get_evaluator()
     ok, msg = evaluator.email_sender.test_connection()
     if not ok:

@@ -15,12 +15,14 @@ from app.auth import get_current_user
 from app.models import UserInDB as User
 from app.config import settings
 from app.evaluation_engine import PDFProcessor
+from app.processing import limited_processing
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 
 
 @router.post("/extract-text", summary="Extract text from a PDF using NVIDIA NIM OCR")
-async def extract_text(
+@limited_processing
+def extract_text(
     pdf_file:   UploadFile = File(..., description="PDF to process (scanned or digital)"),
     force_ocr:  bool       = Form(False, description="Force OCR even if PyPDF2 extracts text"),
     language:   Optional[str] = Form(None, description="Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)"),
@@ -50,7 +52,7 @@ async def extract_text(
             if text and len(text.strip()) > 100:
                 method = "pypdf2"
 
-        if not text or force_ocr:
+        if force_ocr or not text or len(text.strip()) <= 100:
             text = processor.extract_text_with_ocr(pdf_path, log_fn=lambda m: logs.append(m))
             method = "nvidia_nim_ocr" if text else "failed"
 
@@ -73,7 +75,8 @@ async def extract_text(
     "/extract-text-batch",
     summary="Extract text from multiple PDFs",
 )
-async def extract_text_batch(
+@limited_processing
+def extract_text_batch(
     pdf_files:  list[UploadFile] = File(...),
     force_ocr:  bool             = Form(False),
     language:   Optional[str] = Form(None, description="Language for OCR (uses NVIDIA Nemotron OCR v2 if specified)"),
@@ -98,7 +101,7 @@ async def extract_text_batch(
                 if text and len(text.strip()) > 100:
                     method = "pypdf2"
 
-            if not text or force_ocr:
+            if force_ocr or not text or len(text.strip()) <= 100:
                 text = processor.extract_text_with_ocr(pdf_path, log_fn=lambda m: logs.append(m))
                 method = "nvidia_nim_ocr" if text else "failed"
 
