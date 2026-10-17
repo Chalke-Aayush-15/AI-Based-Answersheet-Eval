@@ -77,3 +77,76 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### frontend
 npm start
+
+## Render OCR / evaluation reliability
+
+The OCR and evaluation endpoints run as synchronous FastAPI handlers, so their
+blocking PDF conversion, NVIDIA calls, and model inference execute in worker
+threads instead of blocking the API event loop. The existing frontend request
+and response formats are unchanged.
+
+### Recommended Render configuration
+
+- Run from the backend directory with start command
+	`uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1`.
+	`$PORT` here is Render's Linux environment variable, not PowerShell syntax.
+- Configure `/health` as the health-check path.
+- Ensure Poppler's `pdfinfo` and `pdftoppm` executables are installed in the
+	deployment image (Debian/Ubuntu package: `poppler-utils`). Installing the
+	Python package `pdf2image` alone does not install these binaries.
+- Set `NVIDIA_API_KEY` in Render's environment settings. Check that your key
+	has access to the configured vision model and sufficient NVIDIA quota.
+- Set `REACT_APP_API_URL` in Vercel to the HTTPS Render backend URL and redeploy
+	the frontend; Create React App embeds this value at build time.
+
+| Backend environment variable | Default | Purpose |
+| --- | --- | --- |
+| `PROCESSING_MAX_JOBS` | `1` | Maximum active OCR/evaluation requests per process, shared by single and batch routes |
+| `OCR_MAX_WORKERS` | `1` | Maximum rendered pages / concurrent NVIDIA page requests in a batch |
+| `OCR_DPI` | `120` | PDF rendering resolution; increase if handwriting accuracy needs it |
+| `OCR_TIMEOUT` | `90` | NVIDIA response read timeout in seconds, per attempt |
+| `NVIDIA_OCR_MODEL` | `meta/llama-3.2-11b-vision-instruct` | Vision model ID supporting NVIDIA's chat-completions image format |
+| `POPPLER_PATH` | Windows development fallback; system PATH on Linux | Optional directory containing Poppler binaries |
+| `CORS_ORIGINS` | Local development URLs and `https://ai-based-answersheet-eval.vercel.app` | Comma-separated frontend origins; add custom domains or preview origins explicitly |
+
+Use conservative concurrency until you have measured peak memory. The semantic
+model is reused once per process, but PyTorch plus the model may still exceed
+small instance memory limits. Increasing the number of server workers duplicates
+model memory and the per-process admission limit.
+
+### Failure behavior
+
+- An extra OCR/evaluation request gets HTTP **503** and `Retry-After: 10`
+	while the processing slot is occupied. This is admission control, not a job
+	queue. The frontend displays the server's error message; retry manually after
+	the active job completes. Upload POST requests are not automatically retried.
+- PDF images are rendered in bounded batches and closed before the next batch.
+- NVIDIA timeouts, connection failures, rate limits, and selected transient
+	server failures are retried at most three times. `Retry-After` seconds and
+	HTTP dates are honored up to 120 seconds. Invalid keys/models fail immediately.
+- Failed OCR pages abort the request rather than silently grading partial text.
+	A blank/unreadable scanned page may therefore require cleaning the PDF first.
+- Render logs include NVIDIA HTTP status, page number, and attempt number, but
+	not API keys, image payloads, or upstream response bodies.
+
+These changes do not make processing durable or eliminate HTTP gateway timeouts.
+For large batches, use a persistent job queue and separate worker, return a job
+ID on upload, and poll for progress/results. Store uploads/results in persistent
+object storage; Render's local filesystem can be lost on restart or redeploy.
+Render Free services also spin down after inactivity; a paid service removes
+that cold-start limitation, but does not fix NVIDIA quota or code errors.
+
+### Regression tests
+
+From the backend directory, install the development requirements with
+`python -m pip install -r requirements-dev.txt`, then run
+`python -m unittest discover -s tests -v` in your selected Python environment.
+Tests mock NVIDIA and model loading, do not connect to MongoDB, and cover
+event-loop responsiveness, overload rejection, slot release, model reuse,
+page ordering/cleanup, and retry behavior.
+
+### Credential security
+
+Rotate any credentials previously committed to source control, including NVIDIA,
+MongoDB, SMTP, JWT signing, and payment credentials. Set replacements as Render
+environment variables, remove hardcoded secrets, and never commit live keys.
